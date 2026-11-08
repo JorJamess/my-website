@@ -78,6 +78,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="mt-auto flex items-center gap-1 px-1">
           <ThemeToggle />
           <LogoutButton onDone={() => setAuthed(false)} />
+          <span className="ml-auto font-mono text-[10px] text-muted-foreground/60" title="เวอร์ชันที่ deploy อยู่">
+            {process.env.NEXT_PUBLIC_COMMIT}
+          </span>
         </div>
       </aside>
 
