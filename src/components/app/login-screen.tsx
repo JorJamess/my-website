@@ -48,7 +48,7 @@ export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
           />
           {error && (
             <p id="password-error" className="text-sm text-destructive">
-              {error}. Try again.
+              {error}.
             </p>
           )}
         </div>

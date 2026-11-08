@@ -16,6 +16,8 @@ export const metadata: Metadata = {
   title: { default: "jameswebpupu", template: "%s · jameswebpupu" },
   description: "James's calendar, notes and money in one place",
   robots: { index: false, follow: false },
+  applicationName: "jameswebpupu",
+  appleWebApp: { capable: true, title: "jameswebpupu", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

@@ -68,6 +68,12 @@ export const api = {
   moneyTransactions: (from: string, to: string) =>
     request<{ transactions: MoneyTransaction[] }>(`/api/money/transactions?from=${from}&to=${to}`).then((r) => r.transactions),
 
+  backups: () =>
+    request<{ backups: { key: string; created_at: string; reason: string; events: number; notes: number; bytes: number }[] }>(
+      "/api/backups",
+    ).then((r) => r.backups),
+  backupNow: () => request<{ backup: { key: string } }>("/api/backups", json("POST")),
+
   connect: () =>
     request<{ configured: boolean; origin: string; urlWithKey: string | null; urlBearer: string; token: string | null }>(
       "/api/connect",

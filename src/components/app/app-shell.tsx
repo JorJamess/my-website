@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { CalendarDays, LayoutGrid, Loader2, LogOut, Moon, NotebookPen, Plug, Sun } from "lucide-react";
+import { CalendarDays, LayoutGrid, Loader2, LogOut, Moon, NotebookPen, Plug, Settings, Sun } from "lucide-react";
 import { api, UNAUTHORIZED_EVENT } from "@/lib/client/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -67,6 +67,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
         <div className="mt-auto flex items-center gap-0.5">
+          <SettingsLink active={pathname.startsWith("/settings")} />
           <ThemeToggle />
           <LogoutButton onDone={() => setAuthed(false)} />
           <span className="ml-auto pr-1 font-mono text-[10px] text-muted-foreground/60" title="Deployed version">
@@ -82,6 +83,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {SITE_NAME}
           </Link>
           <div className="flex items-center gap-0.5">
+            <SettingsLink active={pathname.startsWith("/settings")} />
             <ThemeToggle />
             <LogoutButton onDone={() => setAuthed(false)} />
           </div>
@@ -110,6 +112,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
       </div>
     </div>
+  );
+}
+
+function SettingsLink({ active }: { active: boolean }) {
+  return (
+    <Button variant="ghost" size="icon-sm" asChild className={cn(active && "bg-brand-soft text-brand")}>
+      <Link href="/settings" aria-label="Settings" title="Settings" aria-current={active ? "page" : undefined}>
+        <Settings />
+      </Link>
+    </Button>
   );
 }
 
