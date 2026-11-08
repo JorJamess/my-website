@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, Loader2, NotebookPen, Pin, PinOff, Plus, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, Pin, PinOff, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, notifyChanged } from "@/lib/client/api";
 import { useData } from "@/lib/client/use-data";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Pupu } from "./pupu";
 
 type Draft = { title: string; content: string; note_date: string; pinned: boolean };
 const emptyDraft = (): Draft => ({ title: "", content: "", note_date: localDateKey(), pinned: false });
@@ -59,7 +60,10 @@ export function NotesView() {
           <div className="space-y-1">
             {loading && !notes && <div className="h-16 animate-pulse rounded-lg bg-muted" />}
             {notes?.length === 0 && (
-              <p className="py-8 text-center text-sm text-muted-foreground">{debounced ? "No notes match your search." : "No notes yet."}</p>
+              <div className="group/pupu flex flex-col items-center py-8 text-center text-sm text-muted-foreground">
+                <Pupu size={56} mood="sleepy" className="mb-2" />
+                <p>{debounced ? "No notes match your search." : "No notes yet."}</p>
+              </div>
             )}
             {notes?.map((n) => (
               <button
@@ -90,8 +94,8 @@ export function NotesView() {
             onClose={() => setSelectedId(null)}
           />
         ) : (
-          <Card className="hidden items-center justify-center py-20 text-center text-sm text-muted-foreground md:flex">
-            <NotebookPen className="size-6" />
+          <Card className="group/pupu hidden items-center justify-center gap-3 py-20 text-center text-sm text-muted-foreground md:flex">
+            <Pupu size={88} />
             <p>Pick a note on the left, or start a new one.</p>
           </Card>
         )}

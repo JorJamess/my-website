@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/componen
 import { EventDialog } from "./event-dialog";
 import { EventRow } from "./event-row";
 import { DayMoney } from "./day-money";
+import { Pupu } from "./pupu";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]; // เริ่มวันจันทร์
 
@@ -243,7 +244,8 @@ export function CalendarView() {
                 ))}
               </div>
             ) : (
-              <div className="py-6 text-center text-sm text-muted-foreground">
+              <div className="group/pupu flex flex-col items-center py-5 text-center text-sm text-muted-foreground">
+                <Pupu size={64} mood="sleepy" className="mb-2" />
                 <p>Nothing on this day.</p>
                 <Button variant="link" size="sm" onClick={() => openNew(selected)}>
                   Add an event

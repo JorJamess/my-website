@@ -226,3 +226,27 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Pupu: ears wiggle on hover, z's drift while sleeping */
+@keyframes pupu-wiggle-l {
+  0%, 100% { transform: rotate(0deg); }
+  30% { transform: rotate(-12deg); }
+  60% { transform: rotate(6deg); }
+}
+@keyframes pupu-wiggle-r {
+  0%, 100% { transform: rotate(0deg); }
+  30% { transform: rotate(12deg); }
+  60% { transform: rotate(-6deg); }
+}
+@keyframes pupu-z {
+  0%, 100% { opacity: 0.35; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-8px); }
+}
+.pupu .pupu-ear { transform-box: view-box; }
+.pupu .pupu-ear-l { transform-origin: 165px 145px; }
+.pupu .pupu-ear-r { transform-origin: 235px 145px; }
+.pupu:hover .pupu-ear-l,
+.group\/pupu:hover .pupu .pupu-ear-l { animation: pupu-wiggle-l 0.6s var(--ease-out-soft); }
+.pupu:hover .pupu-ear-r,
+.group\/pupu:hover .pupu .pupu-ear-r { animation: pupu-wiggle-r 0.6s var(--ease-out-soft); }
+.pupu .pupu-z { animation: pupu-z 3.2s ease-in-out infinite; }

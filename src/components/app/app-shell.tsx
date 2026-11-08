@@ -9,6 +9,7 @@ import { api, UNAUTHORIZED_EVENT } from "@/lib/client/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { LoginScreen } from "./login-screen";
+import { Pupu } from "./pupu";
 
 export const SITE_NAME = "jameswebpupu";
 
@@ -47,7 +48,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-dvh">
       {/* Sidebar (desktop) */}
       <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 flex-col border-r px-4 py-7 md:flex">
-        <Link href="/" className="mb-6 px-2.5 text-[15px] font-semibold tracking-tight">
+        <Link href="/" className="group/pupu mb-6 flex items-center gap-2 px-1.5 text-[15px] font-semibold tracking-tight">
+          <Pupu size={30} />
           {SITE_NAME}
         </Link>
         <nav className="flex flex-col gap-0.5">
@@ -79,7 +81,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Top bar (mobile) */}
         <header className="sticky top-0 z-30 flex h-12 items-center justify-between border-b bg-background/85 px-4 backdrop-blur md:hidden">
-          <Link href="/" className="text-[15px] font-semibold tracking-tight">
+          <Link href="/" className="group/pupu flex items-center gap-1.5 text-[15px] font-semibold tracking-tight">
+            <Pupu size={26} />
             {SITE_NAME}
           </Link>
           <div className="flex items-center gap-0.5">

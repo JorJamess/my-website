@@ -6,6 +6,7 @@ import { api } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Pupu } from "./pupu";
 
 export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
   const [password, setPassword] = useState("");
@@ -29,8 +30,7 @@ export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
   return (
     <div className="flex min-h-dvh items-center justify-center px-4">
       <form onSubmit={submit} className="w-full max-w-[340px]">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/pupu.svg" alt="" width={72} height={72} className="motion-rise mb-4 -ml-2" />
+        <Pupu size={76} className="motion-rise mb-4 -ml-2" title="Pupu" />
         <h1 className="text-[28px] font-semibold tracking-tight">
           jameswebpupu<span className="text-brand">.</span>
         </h1>

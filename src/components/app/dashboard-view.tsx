@@ -15,9 +15,18 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { EventDialog } from "./event-dialog";
 import { MoneyCard } from "./money-card";
+import { Pupu } from "./pupu";
 
 function daysBetween(a: string, b: string) {
   return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+}
+
+function greeting() {
+  const h = Number(new Date().toLocaleString("en-US", { hour: "numeric", hourCycle: "h23", timeZone: "Asia/Bangkok" }));
+  if (h < 5) return "Up late, James?";
+  if (h < 12) return "Good morning, James.";
+  if (h < 17) return "Good afternoon, James.";
+  return "Good evening, James.";
 }
 
 function summaryLine(c: { thisWeek: number; doneThisWeek: number }, overdue: number) {
@@ -33,6 +42,7 @@ export function DashboardView() {
   const [dialog, setDialog] = useState<{ open: boolean; event: CalendarEvent | null }>({ open: false, event: null });
   const openEvent = (event: CalendarEvent | null) => setDialog({ open: true, event });
   const today = data?.today ?? localDateKey();
+  const allDone = !!data && data.todayEvents.length > 0 && data.todayEvents.every((e) => e.done) && data.overdue.length === 0;
 
   return (
     <div>
@@ -49,9 +59,19 @@ export function DashboardView() {
         </Button>
       </header>
 
-      <p className="pt-4 pb-8 text-[15px] text-muted-foreground">
-        {data ? summaryLine(data.counts, data.overdue.length) : " "}
-      </p>
+      <div className="group/pupu flex items-center gap-3 pt-4 pb-8">
+        <Pupu
+          size={44}
+          day={Number(today.slice(8))}
+          mood={allDone ? "cheer" : "happy"}
+          className="motion-pop"
+          title={allDone ? "Pupu is cheering: everything today is done" : "Pupu"}
+        />
+        <p className="text-[15px] text-muted-foreground">
+          <span className="font-medium text-foreground">{allDone ? "All done for today. Nice work!" : greeting()}</span>{" "}
+          {data ? summaryLine(data.counts, data.overdue.length) : ""}
+        </p>
+      </div>
       {error && <p className="-mt-4 mb-6 text-sm text-destructive">{error}</p>}
 
       <div className="grid gap-12 lg:grid-cols-[1.35fr_1fr] lg:gap-14">
@@ -69,12 +89,15 @@ export function DashboardView() {
               ))}
             </ol>
           ) : (
-            <Empty>
-              Nothing scheduled today.{" "}
-              <button className="font-medium text-brand underline-offset-4 hover:underline" onClick={() => openEvent(null)}>
-                Add an event
-              </button>
-            </Empty>
+            <div className="group/pupu flex items-center gap-3 py-2">
+              <Pupu size={56} mood="sleepy" />
+              <p className="text-[15px] text-muted-foreground">
+                Nothing scheduled today.{" "}
+                <button className="font-medium text-brand underline-offset-4 hover:underline" onClick={() => openEvent(null)}>
+                  Add an event
+                </button>
+              </p>
+            </div>
           )}
 
           <SectionLabel className="mt-8">Up next</SectionLabel>
