@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarDays, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { api } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,31 +27,30 @@ export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center p-4">
-      <form onSubmit={submit} className="w-full max-w-xs space-y-5">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <CalendarDays className="size-5" />
-          </span>
-          <div>
-            <h1 className="text-lg font-semibold">My Website</h1>
-            <p className="text-sm text-muted-foreground">ใส่รหัสผ่านเพื่อเข้าใช้งาน</p>
-          </div>
-        </div>
-        <div className="space-y-2">
+    <div className="flex min-h-dvh items-center justify-center px-4">
+      <form onSubmit={submit} className="w-full max-w-[340px]">
+        <h1 className="text-[28px] font-semibold tracking-tight">jameswebpupu</h1>
+        <p className="mt-1 text-[15px] text-muted-foreground">ปฏิทิน บันทึก และการเงินของเจมส์</p>
+        <div className="mt-8 space-y-2">
           <Label htmlFor="password">รหัสผ่าน</Label>
           <Input
             id="password"
             type="password"
             autoFocus
             autoComplete="current-password"
+            className="h-10"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             aria-invalid={!!error}
+            aria-describedby={error ? "password-error" : undefined}
           />
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && (
+            <p id="password-error" className="text-sm text-destructive">
+              {error} ลองพิมพ์ใหม่อีกครั้ง
+            </p>
+          )}
         </div>
-        <Button type="submit" className="w-full" size="lg" disabled={pending || !password}>
+        <Button type="submit" className="mt-4 h-10 w-full rounded-full" disabled={pending || !password}>
           {pending && <Loader2 className="animate-spin" />}
           เข้าสู่ระบบ
         </Button>

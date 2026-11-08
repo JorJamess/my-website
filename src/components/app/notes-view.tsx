@@ -43,8 +43,8 @@ export function NotesView() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">บันทึก</h1>
-        <Button onClick={() => setSelectedId("new")}>
+        <h1 className="text-[26px] font-medium tracking-tight">Notes</h1>
+        <Button className="rounded-full px-4" onClick={() => setSelectedId("new")}>
           <Plus /> บันทึกใหม่
         </Button>
       </div>
@@ -187,7 +187,7 @@ function NoteEditor({
               {confirmDelete && "ยืนยันลบ"}
             </Button>
           )}
-          <Button size="sm" onClick={save} disabled={saving || !dirty}>
+          <Button size="sm" className="rounded-full px-3" onClick={save} disabled={saving || !dirty}>
             {saving && <Loader2 className="animate-spin" />}
             บันทึก
           </Button>
@@ -196,7 +196,7 @@ function NoteEditor({
       <Input
         placeholder="หัวข้อ"
         autoFocus={!note}
-        className="h-auto border-0 px-0 text-lg font-semibold shadow-none focus-visible:ring-0 dark:bg-transparent"
+        className="h-auto border-0 px-0 text-[22px] font-medium tracking-tight shadow-none focus-visible:ring-0 md:text-[22px] dark:bg-transparent"
         value={draft.title}
         onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
       />
@@ -213,8 +213,8 @@ function NoteEditor({
         }}
       />
       <p className="text-xs text-muted-foreground">
-        {note && <>แก้ไขล่าสุด {new Date(note.updated_at).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })} · </>}
-        ⌘/Ctrl + S เพื่อบันทึก
+        {note && <>แก้ไขล่าสุด {new Date(note.updated_at).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })} </>}
+        กด ⌘/Ctrl + S เพื่อบันทึก
       </p>
     </Card>
   );

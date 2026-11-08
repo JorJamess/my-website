@@ -92,9 +92,9 @@ export function ConnectView() {
   return (
     <div className="max-w-3xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">เชื่อมต่อกับ Claude (MCP)</h1>
+        <h1 className="text-[26px] font-medium tracking-tight">Claude</h1>
         <p className="text-sm text-muted-foreground">
-          ให้ Claude ดูสรุปกำหนดการ ลงงาน และจดบันทึกให้คุณได้โดยตรง
+          เชื่อม Claude ผ่าน MCP เพื่อให้ดูสรุปกำหนดการ ลงงาน และจดบันทึกแทนคุณได้
         </p>
       </div>
 

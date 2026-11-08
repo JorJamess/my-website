@@ -87,7 +87,7 @@ export function CalendarView() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <h1 className="min-w-40 text-2xl font-semibold tracking-tight">
+          <h1 className="min-w-40 text-[26px] font-medium tracking-tight">
             {formatDay(`${month}-01`, { month: "long", year: "numeric" })}
           </h1>
           {loading && <span className="size-1.5 animate-pulse rounded-full bg-muted-foreground" />}
@@ -108,7 +108,7 @@ export function CalendarView() {
           <Button variant="outline" size="icon" aria-label="เดือนถัดไป" onClick={() => goto(1)}>
             <ChevronRight />
           </Button>
-          <Button className="ml-1.5" onClick={() => openNew(selected)}>
+          <Button className="ml-1.5 rounded-full px-4" onClick={() => openNew(selected)}>
             <Plus /> ลงงาน
           </Button>
         </div>
@@ -118,7 +118,7 @@ export function CalendarView() {
         <Card className="gap-0 py-0">
           <div className="grid grid-cols-7 border-b text-center text-xs font-medium text-muted-foreground">
             {WEEKDAYS.map((d, i) => (
-              <div key={d} className={cn("py-2", i >= 5 && "text-rose-500/80")}>
+              <div key={d} className={cn("py-2", i >= 5 && "text-foreground/45")}>
                 {d}
               </div>
             ))}
@@ -148,7 +148,7 @@ export function CalendarView() {
                     i % 7 === 6 && "border-r-0",
                     i >= 35 && "border-b-0",
                     !inMonth && "bg-muted/30 text-muted-foreground",
-                    isSelected && "bg-primary/[0.04] ring-2 ring-primary/40 ring-inset",
+                    isSelected && "bg-muted/70",
                   )}
                 >
                   <div className="flex items-center justify-between gap-1">

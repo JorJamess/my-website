@@ -20,3 +20,14 @@ export const COLOR_CLASSES: Record<EventColor, { dot: string; chip: string; bar:
   pink: { dot: "bg-pink-500", chip: "bg-pink-500/12 text-pink-700 dark:text-pink-300", bar: "bg-pink-500" },
   gray: { dot: "bg-zinc-400", chip: "bg-zinc-500/12 text-zinc-700 dark:text-zinc-300", bar: "bg-zinc-400" },
 };
+
+/** สีจริงของแต่ละป้าย ใช้กับจุด/เส้นที่ต้องการค่าสีตรง ๆ */
+export const COLOR_HEX: Record<EventColor, string> = {
+  blue: "#3b82f6",
+  green: "#10b981",
+  red: "#ef4444",
+  orange: "#f97316",
+  purple: "#8b5cf6",
+  pink: "#ec4899",
+  gray: "#a1a1aa",
+};

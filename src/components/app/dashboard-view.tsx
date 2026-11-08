@@ -2,30 +2,29 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { AlertCircle, ArrowRight, CalendarCheck, CalendarDays, CalendarRange, NotebookPen, Pin, Plus, Loader2 } from "lucide-react";
+import { Loader2, MapPin, Pin, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { api, notifyChanged } from "@/lib/client/api";
 import { useData } from "@/lib/client/use-data";
-import { addDaysKey, eventDayRange, formatDay, localDateKey } from "@/lib/time";
+import { COLOR_HEX } from "@/lib/colors";
+import { addDaysKey, eventDayRange, eventTimeLabel, formatDay, localDateKey, timeOf } from "@/lib/time";
 import type { CalendarEvent } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { EventDialog } from "./event-dialog";
-import { EventRow } from "./event-row";
 import { MoneyCard } from "./money-card";
 
-function greeting() {
-  const h = Number(new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: "Asia/Bangkok" }));
-  if (h < 12) return "สวัสดีตอนเช้า";
-  if (h < 17) return "สวัสดีตอนบ่าย";
-  return "สวัสดีตอนเย็น";
+function daysBetween(a: string, b: string) {
+  return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 }
 
-function dayHeading(key: string, today: string) {
-  if (key === addDaysKey(today, 1)) return "พรุ่งนี้";
-  return formatDay(key, { weekday: "long", day: "numeric", month: "short" });
+function summaryLine(c: { thisWeek: number; doneThisWeek: number }, overdue: number) {
+  const parts = [`สัปดาห์นี้มี ${c.thisWeek} งาน`];
+  if (c.doneThisWeek) parts.push(`เสร็จแล้ว ${c.doneThisWeek} งาน`);
+  if (overdue) parts.push(`และค้างจากก่อนหน้า ${overdue} งาน`);
+  return parts.join(" ");
 }
 
 export function DashboardView() {
@@ -34,138 +33,112 @@ export function DashboardView() {
   const openEvent = (event: CalendarEvent | null) => setDialog({ open: true, event });
   const today = data?.today ?? localDateKey();
 
-  const upcomingByDay = new Map<string, CalendarEvent[]>();
-  for (const e of data?.upcoming ?? []) {
-    const key = eventDayRange(e)[0];
-    upcomingByDay.set(key, [...(upcomingByDay.get(key) ?? []), e]);
-  }
-
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-sm text-muted-foreground">{formatDay(today, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
-          <h1 className="text-2xl font-semibold tracking-tight">{greeting()} 👋</h1>
+    <div>
+      <header className="flex flex-wrap items-end gap-x-6 gap-y-4 border-b pb-7">
+        <p className="text-[72px] leading-[0.85] font-light tracking-[-0.04em] tabular-nums md:text-[96px]">
+          {today.slice(8)}
+        </p>
+        <div className="pb-1">
+          <h1 className="text-[22px] font-medium">{formatDay(today, { weekday: "long" })}</h1>
+          <p className="text-[15px] text-muted-foreground">{formatDay(today, { month: "long", year: "numeric" })}</p>
         </div>
-        <Button onClick={() => openEvent(null)}>
+        <Button className="ml-auto h-9 rounded-full px-4" onClick={() => openEvent(null)}>
           <Plus /> ลงงาน
         </Button>
-      </div>
+      </header>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      <p className="pt-4 pb-8 text-[15px] text-muted-foreground">
+        {data ? summaryLine(data.counts, data.overdue.length) : " "}
+      </p>
+      {error && <p className="-mt-4 mb-6 text-sm text-destructive">{error}</p>}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat icon={CalendarCheck} label="งานวันนี้" value={data?.todayEvents.length} />
-        <Stat icon={CalendarRange} label="สัปดาห์นี้" value={data?.counts.thisWeek} hint={data ? `เสร็จ ${data.counts.doneThisWeek}` : undefined} />
-        <Stat icon={CalendarDays} label="เดือนนี้" value={data?.counts.thisMonth} />
-        <Stat icon={NotebookPen} label="บันทึกทั้งหมด" value={data?.counts.notes} />
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-5">
-        <div className="space-y-6 lg:col-span-3">
-          <Card>
-            <CardHeader>
-              <CardTitle>วันนี้</CardTitle>
-              <CardAction>
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href="/calendar">
-                    เปิดปฏิทิน <ArrowRight />
-                  </Link>
-                </Button>
-              </CardAction>
-            </CardHeader>
-            <CardContent>
-              {loading && !data ? (
-                <Skeleton />
-              ) : data?.todayEvents.length ? (
-                <div className="-mx-2">
-                  {data.todayEvents.map((e) => (
-                    <EventRow key={e.id} event={e} onOpen={openEvent} />
-                  ))}
-                </div>
-              ) : (
-                <Empty text="วันนี้ว่าง ไม่มีงาน" />
-              )}
-            </CardContent>
-          </Card>
-
-          {!!data?.overdue.length && (
-            <Card className="border-orange-500/30">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
-                  <AlertCircle className="size-4" /> เลยกำหนด ยังไม่เสร็จ
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="-mx-2">
-                {data.overdue.map((e) => (
-                  <EventRow
-                    key={e.id}
-                    event={e}
-                    onOpen={openEvent}
-                    prefix={<span>{formatDay(eventDayRange(e)[0], { day: "numeric", month: "short" })}</span>}
-                  />
-                ))}
-              </CardContent>
-            </Card>
+      <div className="grid gap-12 lg:grid-cols-[1.35fr_1fr] lg:gap-14">
+        <div className="min-w-0">
+          <SectionLabel>Today</SectionLabel>
+          {loading && !data ? (
+            <Skeleton />
+          ) : data && (data.todayEvents.length || data.overdue.length) ? (
+            <ol className="relative pl-[22px] before:absolute before:top-1.5 before:bottom-1.5 before:left-1 before:w-px before:bg-border">
+              {data.overdue.map((e) => (
+                <TimelineItem key={e.id} event={e} onOpen={openEvent} late />
+              ))}
+              {data.todayEvents.map((e) => (
+                <TimelineItem key={e.id} event={e} onOpen={openEvent} />
+              ))}
+            </ol>
+          ) : (
+            <Empty>
+              วันนี้ยังว่าง{" "}
+              <button className="font-medium text-foreground underline-offset-4 hover:underline" onClick={() => openEvent(null)}>
+                ลงงาน
+              </button>
+            </Empty>
           )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>7 วันข้างหน้า</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loading && !data ? (
-                <Skeleton />
-              ) : upcomingByDay.size ? (
-                <div className="space-y-4">
-                  {[...upcomingByDay].map(([key, events]) => (
-                    <div key={key}>
-                      <p className="mb-1 text-xs font-medium text-muted-foreground">{dayHeading(key, today)}</p>
-                      <div className="-mx-2">
-                        {events.map((e) => (
-                          <EventRow key={e.id} event={e} onOpen={openEvent} />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <Empty text="ยังไม่มีงานในอีก 7 วัน" />
-              )}
-            </CardContent>
-          </Card>
+          <SectionLabel className="mt-8">Up next</SectionLabel>
+          {data?.upcoming.length ? (
+            <ul>
+              {data.upcoming.map((e) => {
+                const [s, en] = eventDayRange(e);
+                const dayLabel = s === addDaysKey(today, 1) ? "พรุ่งนี้" : formatDay(s, { weekday: "short", day: "numeric" });
+                const right = e.all_day ? (s === en ? "ทั้งวัน" : `${daysBetween(s, en) + 1} วัน`) : timeOf(e.start_at);
+                return (
+                  <li key={e.id} className="border-t">
+                    <button
+                      onClick={() => openEvent(e)}
+                      className="grid w-full grid-cols-[84px_1fr_auto] items-baseline gap-3 py-3 text-left text-[15px] transition-colors hover:bg-muted/40"
+                    >
+                      <span className="text-muted-foreground">{dayLabel}</span>
+                      <span className={cn("truncate", e.done && "text-muted-foreground line-through")}>
+                        <span className="mr-2 inline-block size-[7px] -translate-y-px rounded-full" style={{ background: COLOR_HEX[e.color] }} />
+                        {e.title}
+                      </span>
+                      <span className="text-muted-foreground tabular-nums">{right}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            !loading && <Empty>ไม่มีงานในอีก 7 วัน</Empty>
+          )}
         </div>
 
-        <div className="space-y-6 lg:col-span-2">
-          <MoneyCard />
-          <QuickNote today={today} />
-          <Card>
-            <CardHeader>
-              <CardTitle>บันทึกล่าสุด</CardTitle>
-              <CardAction>
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href="/notes">
-                    ทั้งหมด <ArrowRight />
-                  </Link>
-                </Button>
-              </CardAction>
-            </CardHeader>
-            <CardContent className="space-y-1">
-              {data?.recentNotes.length ? (
-                data.recentNotes.map((n) => (
-                  <Link key={n.id} href={`/notes?id=${n.id}`} className="-mx-2 block rounded-lg px-2 py-2 hover:bg-muted/60">
-                    <p className="flex items-center gap-1.5 truncate text-sm font-medium">
-                      {n.pinned && <Pin className="size-3 shrink-0" />}
-                      {n.title}
-                    </p>
-                    {n.content && <p className="line-clamp-2 text-xs text-muted-foreground">{n.content}</p>}
-                  </Link>
-                ))
-              ) : (
-                <Empty text="ยังไม่มีบันทึก" />
-              )}
-            </CardContent>
-          </Card>
+        <div className="min-w-0 space-y-8">
+          <div>
+            <SectionLabel>Money this month</SectionLabel>
+            <MoneyCard />
+          </div>
+          <div>
+            <SectionLabel>Quick note</SectionLabel>
+            <QuickNote today={today} />
+          </div>
+          <div>
+            <SectionLabel>
+              Recent notes
+              <Link href="/notes" className="ml-auto font-normal hover:text-foreground">
+                ดูทั้งหมด
+              </Link>
+            </SectionLabel>
+            {data?.recentNotes.length ? (
+              <ul>
+                {data.recentNotes.map((n) => (
+                  <li key={n.id} className="border-t">
+                    <Link href={`/notes?id=${n.id}`} className="block py-2.5 transition-colors hover:bg-muted/40">
+                      <span className="flex items-center gap-1.5 text-[15px]">
+                        {n.pinned && <Pin className="size-3 shrink-0 text-muted-foreground" />}
+                        <span className="truncate">{n.title}</span>
+                      </span>
+                      {n.content && <span className="line-clamp-1 text-[13.5px] text-muted-foreground">{n.content}</span>}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <Empty>ยังไม่มีบันทึก จดอะไรไว้ในช่องด้านบนได้เลย</Empty>
+            )}
+          </div>
         </div>
       </div>
 
@@ -179,19 +152,56 @@ export function DashboardView() {
   );
 }
 
+function TimelineItem({ event, onOpen, late }: { event: CalendarEvent; onOpen: (e: CalendarEvent) => void; late?: boolean }) {
+  async function toggleDone(done: boolean) {
+    try {
+      await api.updateEvent(event.id, { done });
+      notifyChanged();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "อัปเดตไม่สำเร็จ");
+    }
+  }
+  const [start] = eventDayRange(event);
+  return (
+    <li className="relative flex items-start gap-3 pb-5 last:pb-1">
+      <span
+        aria-hidden
+        className="absolute top-[7px] -left-[22px] size-[9px] rounded-full ring-[3px] ring-background"
+        style={{ background: COLOR_HEX[event.color] }}
+      />
+      <button type="button" onClick={() => onOpen(event)} className="min-w-0 flex-1 text-left">
+        <span className={cn("block text-[13px] text-muted-foreground tabular-nums", late && "text-destructive")}>
+          {late ? `เลยกำหนดตั้งแต่ ${formatDay(start, { day: "numeric", month: "short" })}` : eventTimeLabel(event)}
+        </span>
+        <span className={cn("block text-[17px] font-medium", event.done && "text-muted-foreground line-through")}>
+          {event.title}
+        </span>
+        {event.location && (
+          <span className="flex items-center gap-1 text-[13.5px] text-muted-foreground">
+            <MapPin className="size-3" /> {event.location}
+          </span>
+        )}
+      </button>
+      <Checkbox
+        className="mt-1"
+        checked={event.done}
+        onCheckedChange={(v) => toggleDone(v === true)}
+        aria-label={event.done ? `ทำเครื่องหมายว่า ${event.title} ยังไม่เสร็จ` : `ทำเครื่องหมายว่า ${event.title} เสร็จแล้ว`}
+      />
+    </li>
+  );
+}
+
 function QuickNote({ today }: { today: string }) {
-  const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
 
-  async function save(e: React.FormEvent) {
-    e.preventDefault();
-    const t = title.trim() || content.trim().split("\n")[0].slice(0, 80);
-    if (!t) return;
+  async function save() {
+    const text = content.trim();
+    if (!text) return;
     setSaving(true);
     try {
-      await api.createNote({ title: t, content, note_date: today });
-      setTitle("");
+      await api.createNote({ title: text.split("\n")[0].slice(0, 80), content: text, note_date: today });
       setContent("");
       toast.success("จดบันทึกแล้ว");
       notifyChanged();
@@ -203,68 +213,45 @@ function QuickNote({ today }: { today: string }) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>จดด่วน</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={save} className="space-y-2">
-          <Input placeholder="หัวข้อ (ไม่บังคับ)" value={title} onChange={(e) => setTitle(e.target.value)} />
-          <Textarea
-            placeholder="จดอะไรไว้หน่อย…"
-            rows={4}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save(e);
-            }}
-          />
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">⌘/Ctrl + Enter เพื่อบันทึก</span>
-            <Button type="submit" size="sm" disabled={saving || (!title.trim() && !content.trim())}>
-              {saving && <Loader2 className="animate-spin" />}
-              บันทึก
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+    <div className="rounded-[14px] border bg-card px-4 pt-3 pb-2.5">
+      <Textarea
+        aria-label="จดด่วน"
+        placeholder="จดอะไรไว้หน่อย…"
+        rows={3}
+        className="min-h-[72px] resize-none border-0 bg-transparent p-0 text-[15px] shadow-none focus-visible:ring-0 dark:bg-transparent"
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            save();
+          }
+        }}
+      />
+      <div className="flex items-center justify-between pt-1">
+        <span className="text-xs text-muted-foreground">บรรทัดแรกเป็นหัวข้อ กด ⌘/Ctrl + Enter เพื่อบันทึก</span>
+        <Button size="sm" variant={content.trim() ? "default" : "ghost"} className="rounded-full" onClick={save} disabled={saving || !content.trim()}>
+          {saving && <Loader2 className="animate-spin" />}
+          บันทึก
+        </Button>
+      </div>
+    </div>
   );
 }
 
-function Stat({
-  icon: Icon,
-  label,
-  value,
-  hint,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value?: number;
-  hint?: string;
-}) {
-  return (
-    <Card size="sm">
-      <CardContent className="space-y-1">
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Icon className="size-3.5" /> {label}
-        </p>
-        <p className="text-2xl font-semibold tabular-nums">{value ?? "–"}</p>
-        {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-      </CardContent>
-    </Card>
-  );
+function SectionLabel({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <h2 className={cn("mb-3.5 flex items-center text-[13px] font-medium text-muted-foreground", className)}>{children}</h2>;
 }
 
-function Empty({ text }: { text: string }) {
-  return <p className="py-4 text-center text-sm text-muted-foreground">{text}</p>;
+function Empty({ children }: { children: React.ReactNode }) {
+  return <p className="py-2 text-[15px] text-muted-foreground">{children}</p>;
 }
 
 function Skeleton() {
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
       {[0, 1].map((i) => (
-        <div key={i} className="h-10 animate-pulse rounded-lg bg-muted" />
+        <div key={i} className="h-11 animate-pulse rounded-lg bg-muted" />
       ))}
     </div>
   );
