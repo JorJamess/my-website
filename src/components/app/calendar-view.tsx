@@ -15,7 +15,7 @@ import { EventDialog } from "./event-dialog";
 import { EventRow } from "./event-row";
 import { DayMoney } from "./day-money";
 
-const WEEKDAYS = ["จ", "อ", "พ", "พฤ", "ศ", "ส", "อา"]; // เริ่มวันจันทร์
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]; // เริ่มวันจันทร์
 
 function monthGrid(month: string) {
   // month = "YYYY-MM"
@@ -93,7 +93,7 @@ export function CalendarView() {
           {loading && <span className="size-1.5 animate-pulse rounded-full bg-muted-foreground" />}
         </div>
         <div className="flex items-center gap-1.5">
-          <Button variant="outline" size="icon" aria-label="เดือนก่อน" onClick={() => goto(-1)}>
+          <Button variant="outline" size="icon" aria-label="Previous month" onClick={() => goto(-1)}>
             <ChevronLeft />
           </Button>
           <Button
@@ -103,13 +103,13 @@ export function CalendarView() {
               setSelected(today);
             }}
           >
-            วันนี้
+            Today
           </Button>
-          <Button variant="outline" size="icon" aria-label="เดือนถัดไป" onClick={() => goto(1)}>
+          <Button variant="outline" size="icon" aria-label="Next month" onClick={() => goto(1)}>
             <ChevronRight />
           </Button>
           <Button className="ml-1.5 rounded-full px-4" onClick={() => openNew(selected)}>
-            <Plus /> ลงงาน
+            <Plus /> New event
           </Button>
         </div>
       </div>
@@ -148,7 +148,7 @@ export function CalendarView() {
                     i % 7 === 6 && "border-r-0",
                     i >= 35 && "border-b-0",
                     !inMonth && "bg-muted/30 text-muted-foreground",
-                    isSelected && "bg-muted/70",
+                    isSelected && "bg-brand-soft/60",
                   )}
                 >
                   <div className="flex items-center justify-between gap-1">
@@ -161,7 +161,7 @@ export function CalendarView() {
                       {Number(key.slice(8))}
                     </span>
                     {spent > 0 && (
-                      <span className="hidden truncate text-[10px] text-red-600/80 tabular-nums sm:block dark:text-red-400/80" title="รายจ่ายวันนี้">
+                      <span className="hidden truncate text-[10px] text-red-600/80 tabular-nums sm:block dark:text-red-400/80" title="Spent this day">
                         −{formatBahtShort(spent)}
                       </span>
                     )}
@@ -172,7 +172,7 @@ export function CalendarView() {
                       <span
                         key={b.id}
                         className="flex items-center gap-1 truncate rounded border border-dashed px-1 py-0.5 text-[11px] leading-tight text-muted-foreground"
-                        title={`${b.name} ครบกำหนด`}
+                        title={`${b.name} due`}
                       >
                         <Receipt className="size-3 shrink-0" />
                         <span className="truncate">
@@ -199,7 +199,7 @@ export function CalendarView() {
                         {e.title}
                       </button>
                     ))}
-                    {hidden > 0 && <span className="px-1 text-[11px] text-muted-foreground">+{hidden} อีก</span>}
+                    {hidden > 0 && <span className="px-1 text-[11px] text-muted-foreground">+{hidden} more</span>}
                   </div>
                   {/* dots (mobile) */}
                   <div className="flex flex-wrap gap-0.5 sm:hidden">
@@ -218,7 +218,7 @@ export function CalendarView() {
           <CardHeader>
             <CardTitle>{formatDay(selected, { weekday: "long", day: "numeric", month: "long" })}</CardTitle>
             <CardAction>
-              <Button variant="ghost" size="icon-sm" aria-label="ลงงานวันนี้" onClick={() => openNew(selected)}>
+              <Button variant="ghost" size="icon-sm" aria-label="Add an event on this day" onClick={() => openNew(selected)}>
                 <Plus />
               </Button>
             </CardAction>
@@ -232,9 +232,9 @@ export function CalendarView() {
               </div>
             ) : (
               <div className="py-6 text-center text-sm text-muted-foreground">
-                <p>ไม่มีงานในวันนี้</p>
+                <p>Nothing on this day.</p>
                 <Button variant="link" size="sm" onClick={() => openNew(selected)}>
-                  + ลงงาน
+                  Add an event
                 </Button>
               </div>
             )}

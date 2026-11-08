@@ -23,7 +23,7 @@ export function EventRow({
       await api.updateEvent(event.id, { done });
       notifyChanged();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "อัปเดตไม่สำเร็จ");
+      toast.error(err instanceof Error ? err.message : "Couldn't update the event");
     }
   }
 
@@ -33,7 +33,7 @@ export function EventRow({
         className="mt-0.5"
         checked={event.done}
         onCheckedChange={(v) => toggleDone(v === true)}
-        aria-label={event.done ? "ทำเครื่องหมายว่ายังไม่เสร็จ" : "ทำเครื่องหมายว่าเสร็จแล้ว"}
+        aria-label={event.done ? "Mark as not done" : "Mark as done"}
       />
       <button type="button" onClick={() => onOpen(event)} className="flex min-w-0 flex-1 items-start gap-2.5 text-left">
         <span className={cn("mt-1 h-3.5 w-1 shrink-0 rounded-full", COLOR_CLASSES[event.color].bar)} />

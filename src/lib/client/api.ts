@@ -27,7 +27,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     const msg =
       data?.error === "invalid_input"
-        ? "ข้อมูลไม่ถูกต้อง: " + (data.issues ?? []).map((i) => `${i.path.join(".")} ${i.message}`).join(", ")
+        ? "Check these fields: " + (data.issues ?? []).map((i) => `${i.path.join(".")} ${i.message}`).join(", ")
         : data?.error ?? `Request failed (${res.status})`;
     throw new ApiError(res.status, msg);
   }

@@ -130,7 +130,7 @@ function EventForm({
       };
       if (event) {
         await api.updateEvent(event.id, { ...payload, end, done: form.done });
-        toast.success("บันทึกการแก้ไขแล้ว");
+        toast.success("Event updated");
       } else {
         await api.createEvent({
           ...payload,
@@ -138,12 +138,12 @@ function EventForm({
           location: payload.location ?? undefined,
           description: payload.description ?? undefined,
         });
-        toast.success("ลงงานแล้ว");
+        toast.success("Event added");
       }
       notifyChanged();
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
+      toast.error(err instanceof Error ? err.message : "Couldn't save the event");
     } finally {
       setSaving(false);
     }
@@ -155,11 +155,11 @@ function EventForm({
     setSaving(true);
     try {
       await api.deleteEvent(event.id);
-      toast.success("ลบงานแล้ว");
+      toast.success("Event deleted");
       notifyChanged();
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "ลบไม่สำเร็จ");
+      toast.error(err instanceof Error ? err.message : "Couldn't delete the event");
     } finally {
       setSaving(false);
     }
@@ -168,16 +168,16 @@ function EventForm({
   return (
         <form onSubmit={save} className="space-y-4">
           <DialogHeader>
-            <DialogTitle>{event ? "แก้ไขงาน" : "ลงงานใหม่"}</DialogTitle>
-            <DialogDescription>เวลาทั้งหมดเป็นเวลาประเทศไทย (UTC{TZ_OFFSET})</DialogDescription>
+            <DialogTitle>{event ? "Edit event" : "New event"}</DialogTitle>
+            <DialogDescription>All times are Thailand time (UTC{TZ_OFFSET}).</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-2">
-            <Label htmlFor="ev-title">ชื่องาน</Label>
+            <Label htmlFor="ev-title">Title</Label>
             <Input
               id="ev-title"
               autoFocus={!event}
-              placeholder="เช่น ประชุมทีม, ส่งงานลูกค้า"
+              placeholder="Team meeting"
               value={form.title}
               onChange={(e) => set("title", e.target.value)}
               required
@@ -186,12 +186,12 @@ function EventForm({
 
           <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
             <Checkbox checked={form.allDay} onCheckedChange={(v) => set("allDay", v === true)} />
-            ทั้งวัน
+            All day
           </label>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="ev-sd">เริ่ม</Label>
+              <Label htmlFor="ev-sd">Starts</Label>
               <Input
                 id="ev-sd"
                 type="date"
@@ -205,12 +205,12 @@ function EventForm({
             </div>
             {!form.allDay && (
               <div className="space-y-2">
-                <Label htmlFor="ev-st">เวลา</Label>
+                <Label htmlFor="ev-st">Time</Label>
                 <Input id="ev-st" type="time" value={form.startTime} onChange={(e) => set("startTime", e.target.value)} required />
               </div>
             )}
             <div className={cn("space-y-2", form.allDay && "col-start-1")}>
-              <Label htmlFor="ev-ed">{form.allDay ? "ถึงวันที่" : "สิ้นสุด"}</Label>
+              <Label htmlFor="ev-ed">{form.allDay ? "Until" : "Ends"}</Label>
               <Input
                 id="ev-ed"
                 type="date"
@@ -221,14 +221,14 @@ function EventForm({
             </div>
             {!form.allDay && (
               <div className="space-y-2">
-                <Label htmlFor="ev-et">เวลา</Label>
+                <Label htmlFor="ev-et">Time</Label>
                 <Input id="ev-et" type="time" value={form.endTime} onChange={(e) => set("endTime", e.target.value)} />
               </div>
             )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="ev-loc">สถานที่</Label>
+            <Label htmlFor="ev-loc">Location</Label>
             <div className="relative">
               <MapPin className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input id="ev-loc" className="pl-8" value={form.location} onChange={(e) => set("location", e.target.value)} />
@@ -236,12 +236,12 @@ function EventForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="ev-desc">รายละเอียด</Label>
+            <Label htmlFor="ev-desc">Details</Label>
             <Textarea id="ev-desc" rows={3} value={form.description} onChange={(e) => set("description", e.target.value)} />
           </div>
 
           <div className="space-y-2">
-            <Label>สี</Label>
+            <Label>Color</Label>
             <div className="flex flex-wrap gap-2">
               {EVENT_COLORS.map((c) => (
                 <button
@@ -266,7 +266,7 @@ function EventForm({
           {event && (
             <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
               <Checkbox checked={form.done} onCheckedChange={(v) => set("done", v === true)} />
-              ทำเสร็จแล้ว
+              Done
             </label>
           )}
 
@@ -274,18 +274,18 @@ function EventForm({
             {event ? (
               <Button type="button" variant="destructive" onClick={remove} disabled={saving}>
                 <Trash2 />
-                {confirmDelete ? "กดอีกครั้งเพื่อยืนยันการลบ" : "ลบ"}
+                {confirmDelete ? "Click again to delete" : "Delete"}
               </Button>
             ) : (
               <span />
             )}
             <div className="flex gap-2">
               <Button type="button" variant="outline" onClick={onClose}>
-                ยกเลิก
+                Cancel
               </Button>
               <Button type="submit" disabled={saving || !form.title.trim()}>
                 {saving && <Loader2 className="animate-spin" />}
-                บันทึก
+                Save event
               </Button>
             </div>
           </DialogFooter>

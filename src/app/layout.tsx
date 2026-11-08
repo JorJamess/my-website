@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 
 export const metadata: Metadata = {
   title: { default: "jameswebpupu", template: "%s · jameswebpupu" },
-  description: "ปฏิทินงาน กำหนดการ และบันทึกส่วนตัว",
+  description: "James's calendar, notes and money in one place",
   robots: { index: false, follow: false },
 };
 
@@ -28,7 +28,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
-      lang="th"
+      lang="en"
       suppressHydrationWarning
       className={`${anuphan.variable} ${geistMono.variable} h-full antialiased`}
     >

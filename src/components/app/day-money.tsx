@@ -17,7 +17,7 @@ export function DayMoney({ date, day, bills }: { date: string; day?: MoneyDay; b
   return (
     <div className="space-y-2 border-t pt-3">
       <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
-        <span>การเงิน</span>
+        <span>Money</span>
         {day && (
           <span className="tabular-nums">
             {day.income > 0 && <span className="text-emerald-600 dark:text-emerald-400">+{formatBaht(day.income)} </span>}
@@ -31,7 +31,7 @@ export function DayMoney({ date, day, bills }: { date: string; day?: MoneyDay; b
           <Receipt className="size-3.5 shrink-0 text-muted-foreground" />
           <span className="min-w-0 flex-1 truncate">
             {b.name}
-            <span className="ml-1 text-xs text-muted-foreground">ครบกำหนด{b.mode === "auto" ? " (ตัดอัตโนมัติ)" : ""}</span>
+            <span className="ml-1 text-xs text-muted-foreground">due{b.mode === "auto" ? ", auto-paid" : ""}</span>
           </span>
           <span className={cn("shrink-0 tabular-nums", b.type === "income" ? "text-emerald-600 dark:text-emerald-400" : "")}>
             {formatBaht(b.amount)}
@@ -43,7 +43,7 @@ export function DayMoney({ date, day, bills }: { date: string; day?: MoneyDay; b
         <div key={t.id} className="flex items-center gap-2 px-2 text-sm">
           <span className="size-2 shrink-0 rounded-full" style={{ background: t.category?.color ?? "#94a3b8" }} />
           <span className="min-w-0 flex-1 truncate">
-            {t.note || t.category?.name || "ไม่ระบุ"}
+            {t.note || t.category?.name || "Untitled"}
             <span className="ml-1 text-xs text-muted-foreground tabular-nums">{t.time}</span>
           </span>
           <span

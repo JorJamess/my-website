@@ -44,7 +44,7 @@ function CopyField({ label, value, token }: { label: string; value: string; toke
   async function copy() {
     if (await copyText(value)) {
       setCopied(true);
-      toast.success("คัดลอกแล้ว");
+      toast.success("Copied");
       setTimeout(() => setCopied(false), 1500);
       return;
     }
@@ -58,7 +58,7 @@ function CopyField({ label, value, token }: { label: string; value: string; toke
       sel?.removeAllRanges();
       sel?.addRange(range);
     });
-    toast.error("เบราว์เซอร์ไม่อนุญาตให้คัดลอกอัตโนมัติ — เลือกข้อความไว้ให้แล้ว กด ⌘C หรือ Ctrl+C");
+    toast.error("Your browser blocked copying. The text is selected, so press ⌘C or Ctrl+C.");
   }
 
   return (
@@ -69,14 +69,14 @@ function CopyField({ label, value, token }: { label: string; value: string; toke
           {show ? value : mask(value, token)}
         </code>
         {token && value.includes(token) && (
-          <Button variant="ghost" size="icon-sm" aria-label={show ? "ซ่อน" : "แสดง"} onClick={() => setShow((s) => !s)}>
+          <Button variant="ghost" size="icon-sm" aria-label={show ? "Hide" : "Show"} onClick={() => setShow((s) => !s)}>
             {show ? <EyeOff /> : <Eye />}
           </Button>
         )}
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label="คัดลอก"
+          aria-label="Copy"
           onClick={copy}
         >
           {copied ? <Check /> : <Copy />}
@@ -94,7 +94,7 @@ export function ConnectView() {
       <div>
         <h1 className="text-[26px] font-medium tracking-tight">Claude</h1>
         <p className="text-sm text-muted-foreground">
-          เชื่อม Claude ผ่าน MCP เพื่อให้ดูสรุปกำหนดการ ลงงาน และจดบันทึกแทนคุณได้
+          Connect Claude over MCP so it can read your schedule, add events and write notes for you.
         </p>
       </div>
 
@@ -104,8 +104,8 @@ export function ConnectView() {
           <CardContent className="flex gap-3 text-sm">
             <ShieldAlert className="size-5 shrink-0 text-orange-500" />
             <p>
-              ยังไม่ได้ตั้งค่า <code>MCP_TOKEN</code> (ต้องยาวอย่างน้อย 16 ตัวอักษร) — รัน{" "}
-              <code>npx wrangler secret put MCP_TOKEN</code> แล้ว deploy ใหม่
+              <code>MCP_TOKEN</code> isn’t set (it needs at least 16 characters). Run{" "}
+              <code>npx wrangler secret put MCP_TOKEN</code>, then deploy again.
             </p>
           </CardContent>
         </Card>
@@ -115,17 +115,17 @@ export function ConnectView() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle>Claude.ai / Claude Desktop / มือถือ</CardTitle>
-              <CardDescription>ใช้ “Custom connector” — URL นี้มีรหัสลับอยู่ในตัว อย่าแชร์ให้ใคร</CardDescription>
+              <CardTitle>Claude.ai, desktop and mobile</CardTitle>
+              <CardDescription>Add it as a custom connector. This URL contains your secret key, so don’t share it.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <CopyField label="Connector URL" value={data.urlWithKey} token={data.token} />
               <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
-                <li>เปิด Claude → Settings → Connectors</li>
+                <li>In Claude, open Settings, then Connectors.</li>
                 <li>
-                  กด <b>Add custom connector</b> ตั้งชื่อ เช่น “ปฏิทินของฉัน” แล้ววาง URL ด้านบน
+                  Choose <b>Add custom connector</b>, name it, and paste the URL above.
                 </li>
-                <li>ในแชท เปิดใช้ connector จากเมนูเครื่องมือ แล้วลองพิมพ์ “สรุปงานสัปดาห์นี้ให้หน่อย”</li>
+                <li>Turn the connector on in a chat and ask “What’s on this week?”</li>
               </ol>
             </CardContent>
           </Card>
@@ -133,11 +133,11 @@ export function ConnectView() {
           <Card>
             <CardHeader>
               <CardTitle>Claude Code</CardTitle>
-              <CardDescription>รันคำสั่งนี้ในเทอร์มินัลครั้งเดียว (ใช้ได้ทุกโปรเจกต์ด้วย --scope user)</CardDescription>
+              <CardDescription>Run this once in a terminal. --scope user makes it work in every project.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <CopyField
-                label="คำสั่ง"
+                label="Command"
                 value={`claude mcp add --scope user --transport http my-calendar ${data.urlBearer} --header "Authorization: Bearer ${data.token}"`}
                 token={data.token}
               />
@@ -146,20 +146,20 @@ export function ConnectView() {
 
           <Card>
             <CardHeader>
-              <CardTitle>เครื่องมือที่ Claude ใช้ได้</CardTitle>
+              <CardTitle>What Claude can do</CardTitle>
             </CardHeader>
             <CardContent>
               <ul className="grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
                 {[
-                  ["get_summary", "สรุปวันนี้ / 7 วันข้างหน้า / เลยกำหนด"],
-                  ["list_events", "ดูงานในช่วงวันที่"],
-                  ["search_events", "ค้นหางาน"],
-                  ["create_event", "ลงงานใหม่"],
-                  ["update_event", "แก้ไข / ทำเครื่องหมายเสร็จ"],
-                  ["delete_event", "ลบงาน"],
-                  ["list_notes · get_note", "ดู/อ่านบันทึก"],
-                  ["create_note · update_note", "จด/แก้บันทึก"],
-                  ["delete_note", "ลบบันทึก"],
+                  ["get_summary", "Today, the next 7 days and overdue events"],
+                  ["list_events", "Events in a date range"],
+                  ["search_events", "Search events"],
+                  ["create_event", "Add an event"],
+                  ["update_event", "Edit an event or mark it done"],
+                  ["delete_event", "Delete an event"],
+                  ["list_notes, get_note", "Browse and read notes"],
+                  ["create_note, update_note", "Write and edit notes"],
+                  ["delete_note", "Delete a note"],
                 ].map(([name, desc]) => (
                   <li key={name}>
                     <code className="text-xs">{name}</code> <span className="text-muted-foreground">— {desc}</span>

@@ -10,7 +10,7 @@ export const GET = api(async (req) => {
   const q = url.searchParams.get("q") ?? undefined;
   if (!from || !to) {
     if (q) return NextResponse.json({ events: await searchEvents(q) });
-    return NextResponse.json({ error: "from และ to จำเป็น" }, { status: 400 });
+    return NextResponse.json({ error: "from and to are required" }, { status: 400 });
   }
   return NextResponse.json({ events: await listEvents({ from, to, q }) });
 });

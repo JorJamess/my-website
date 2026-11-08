@@ -1,13 +1,13 @@
 import type { EventColor } from "./types";
 
 export const COLOR_LABELS: Record<EventColor, string> = {
-  blue: "น้ำเงิน",
-  green: "เขียว",
-  red: "แดง",
-  orange: "ส้ม",
-  purple: "ม่วง",
-  pink: "ชมพู",
-  gray: "เทา",
+  blue: "Blue",
+  green: "Green",
+  red: "Red",
+  orange: "Orange",
+  purple: "Purple",
+  pink: "Pink",
+  gray: "Gray",
 };
 
 /** dot = จุดสี, chip = ป้ายในปฏิทิน */

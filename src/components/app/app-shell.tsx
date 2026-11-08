@@ -58,7 +58,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               aria-current={isActive(href) ? "page" : undefined}
               className={cn(
                 "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[14.5px] text-muted-foreground transition-colors hover:text-foreground",
-                isActive(href) && "bg-muted font-medium text-foreground",
+                isActive(href) && "bg-brand-soft font-medium text-brand hover:text-brand",
               )}
             >
               <Icon className="size-[17px]" strokeWidth={1.7} />
@@ -69,7 +69,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="mt-auto flex items-center gap-0.5">
           <ThemeToggle />
           <LogoutButton onDone={() => setAuthed(false)} />
-          <span className="ml-auto pr-1 font-mono text-[10px] text-muted-foreground/60" title="เวอร์ชันที่ deploy อยู่">
+          <span className="ml-auto pr-1 font-mono text-[10px] text-muted-foreground/60" title="Deployed version">
             {process.env.NEXT_PUBLIC_COMMIT}
           </span>
         </div>
@@ -98,7 +98,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               aria-current={isActive(href) ? "page" : undefined}
               className={cn(
                 "flex flex-col items-center gap-0.5 py-2 text-[11px] text-muted-foreground",
-                isActive(href) && "font-medium text-foreground",
+                isActive(href) && "font-medium text-brand",
               )}
             >
               <Icon className="size-5" strokeWidth={1.7} />
@@ -117,8 +117,8 @@ function ThemeToggle() {
     <Button
       variant="ghost"
       size="icon-sm"
-      aria-label="สลับธีมสว่าง/มืด"
-      title="สลับธีม"
+      aria-label="Switch light or dark theme"
+      title="Switch theme"
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
     >
       <Sun className="hidden dark:block" />
@@ -132,8 +132,8 @@ function LogoutButton({ onDone }: { onDone: () => void }) {
     <Button
       variant="ghost"
       size="icon-sm"
-      aria-label="ออกจากระบบ"
-      title="ออกจากระบบ"
+      aria-label="Log out"
+      title="Log out"
       onClick={async () => {
         await api.logout().catch(() => {});
         onDone();

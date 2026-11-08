@@ -79,7 +79,7 @@ export function splitLocal(iso: string) {
 const keyToDate = (key: string) => new Date(`${key}T00:00:00Z`);
 
 export function formatDay(key: string, opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" }) {
-  return new Intl.DateTimeFormat("th-TH", { timeZone: "UTC", ...opts }).format(keyToDate(key));
+  return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", ...opts }).format(keyToDate(key));
 }
 
 export function weekdayIndex(key: string) {
@@ -89,9 +89,9 @@ export function weekdayIndex(key: string) {
 /** label ของงาน เช่น "ทั้งวัน", "14:30–16:00" */
 export function eventTimeLabel(e: EventTimes) {
   const [s, en] = eventDayRange(e);
-  if (e.all_day) return s === en ? "ทั้งวัน" : `ทั้งวัน · ถึง ${formatDay(en, { day: "numeric", month: "short" })}`;
+  if (e.all_day) return s === en ? "All day" : `All day, until ${formatDay(en, { month: "short", day: "numeric" })}`;
   const start = timeOf(e.start_at);
   if (!e.end_at) return start;
   const endDay = localDateKey(new Date(e.end_at));
-  return endDay === s ? `${start}–${timeOf(e.end_at)}` : `${start} → ${formatDay(endDay, { day: "numeric", month: "short" })} ${timeOf(e.end_at)}`;
+  return endDay === s ? `${start}–${timeOf(e.end_at)}` : `${start} – ${formatDay(endDay, { month: "short", day: "numeric" })} ${timeOf(e.end_at)}`;
 }

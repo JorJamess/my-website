@@ -20,7 +20,7 @@ export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
       await api.login(password);
       onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "เข้าสู่ระบบไม่สำเร็จ");
+      setError(err instanceof Error ? err.message : "Couldn't log in");
     } finally {
       setPending(false);
     }
@@ -29,10 +29,12 @@ export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
   return (
     <div className="flex min-h-dvh items-center justify-center px-4">
       <form onSubmit={submit} className="w-full max-w-[340px]">
-        <h1 className="text-[28px] font-semibold tracking-tight">jameswebpupu</h1>
-        <p className="mt-1 text-[15px] text-muted-foreground">ปฏิทิน บันทึก และการเงินของเจมส์</p>
+        <h1 className="text-[28px] font-semibold tracking-tight">
+          jameswebpupu<span className="text-brand">.</span>
+        </h1>
+        <p className="mt-1 text-[15px] text-muted-foreground">Calendar, notes and money in one place.</p>
         <div className="mt-8 space-y-2">
-          <Label htmlFor="password">รหัสผ่าน</Label>
+          <Label htmlFor="password">Password</Label>
           <Input
             id="password"
             type="password"
@@ -46,13 +48,13 @@ export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
           />
           {error && (
             <p id="password-error" className="text-sm text-destructive">
-              {error} ลองพิมพ์ใหม่อีกครั้ง
+              {error}. Try again.
             </p>
           )}
         </div>
         <Button type="submit" className="mt-4 h-10 w-full rounded-full" disabled={pending || !password}>
           {pending && <Loader2 className="animate-spin" />}
-          เข้าสู่ระบบ
+          Log in
         </Button>
       </form>
     </div>

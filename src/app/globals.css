@@ -40,6 +40,8 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
   --color-positive: var(--positive);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -56,8 +58,10 @@
   --card-foreground: #16181D;
   --popover: #FFFFFF;
   --popover-foreground: #16181D;
-  --primary: #16181D;
-  --primary-foreground: #FBFBFA;
+  --primary: #2952E3;
+  --primary-foreground: #FFFFFF;
+  --brand: #2952E3;
+  --brand-soft: #EBF0FF;
   --secondary: #F1F1EF;
   --secondary-foreground: #16181D;
   --muted: #F1F1EF;
@@ -67,7 +71,7 @@
   --destructive: #C8412F;
   --border: #E8E8E5;
   --input: #E2E2DF;
-  --ring: #9A9EA6;
+  --ring: #2952E3;
   --chart-1: #f97316;
   --chart-2: #3b82f6;
   --chart-3: #94a3b8;
@@ -77,8 +81,8 @@
   --positive: #0F7A4F;
   --sidebar: #FBFBFA;
   --sidebar-foreground: #16181D;
-  --sidebar-primary: #16181D;
-  --sidebar-primary-foreground: #FBFBFA;
+  --sidebar-primary: #2952E3;
+  --sidebar-primary-foreground: #FFFFFF;
   --sidebar-accent: #F1F1EF;
   --sidebar-accent-foreground: #16181D;
   --sidebar-border: #E8E8E5;
@@ -92,8 +96,10 @@
   --card-foreground: #EDEDEA;
   --popover: #1F2023;
   --popover-foreground: #EDEDEA;
-  --primary: #EDEDEA;
-  --primary-foreground: #141517;
+  --primary: #7C98FF;
+  --primary-foreground: #0D1530;
+  --brand: #7C98FF;
+  --brand-soft: #1C2442;
   --secondary: #24252A;
   --secondary-foreground: #EDEDEA;
   --muted: #222327;
@@ -103,7 +109,7 @@
   --destructive: #E0644F;
   --border: #2A2B30;
   --input: #303137;
-  --ring: #6B6F78;
+  --ring: #7C98FF;
   --chart-1: #fb923c;
   --chart-2: #60a5fa;
   --chart-3: #94a3b8;
@@ -112,8 +118,8 @@
   --positive: #3FBF85;
   --sidebar: #141517;
   --sidebar-foreground: #EDEDEA;
-  --sidebar-primary: #EDEDEA;
-  --sidebar-primary-foreground: #141517;
+  --sidebar-primary: #7C98FF;
+  --sidebar-primary-foreground: #0D1530;
   --sidebar-accent: #24252A;
   --sidebar-accent-foreground: #EDEDEA;
   --sidebar-border: #2A2B30;

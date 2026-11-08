@@ -21,10 +21,11 @@ function daysBetween(a: string, b: string) {
 }
 
 function summaryLine(c: { thisWeek: number; doneThisWeek: number }, overdue: number) {
-  const parts = [`สัปดาห์นี้มี ${c.thisWeek} งาน`];
-  if (c.doneThisWeek) parts.push(`เสร็จแล้ว ${c.doneThisWeek} งาน`);
-  if (overdue) parts.push(`และค้างจากก่อนหน้า ${overdue} งาน`);
-  return parts.join(" ");
+  const n = (k: number, w: string) => `${k} ${w}${k === 1 ? "" : "s"}`;
+  let line = `This week you have ${n(c.thisWeek, "event")}`;
+  if (c.doneThisWeek) line += `, ${c.doneThisWeek} done`;
+  if (overdue) line += `, and ${n(overdue, "overdue event")} from before`;
+  return `${line}.`;
 }
 
 export function DashboardView() {
@@ -36,7 +37,7 @@ export function DashboardView() {
   return (
     <div>
       <header className="flex flex-wrap items-end gap-x-6 gap-y-4 border-b pb-7">
-        <p className="text-[72px] leading-[0.85] font-light tracking-[-0.04em] tabular-nums md:text-[96px]">
+        <p className="text-[72px] leading-[0.85] font-light tracking-[-0.04em] text-brand tabular-nums md:text-[96px]">
           {today.slice(8)}
         </p>
         <div className="pb-1">
@@ -44,7 +45,7 @@ export function DashboardView() {
           <p className="text-[15px] text-muted-foreground">{formatDay(today, { month: "long", year: "numeric" })}</p>
         </div>
         <Button className="ml-auto h-9 rounded-full px-4" onClick={() => openEvent(null)}>
-          <Plus /> ลงงาน
+          <Plus /> New event
         </Button>
       </header>
 
@@ -69,9 +70,9 @@ export function DashboardView() {
             </ol>
           ) : (
             <Empty>
-              วันนี้ยังว่าง{" "}
-              <button className="font-medium text-foreground underline-offset-4 hover:underline" onClick={() => openEvent(null)}>
-                ลงงาน
+              Nothing scheduled today.{" "}
+              <button className="font-medium text-brand underline-offset-4 hover:underline" onClick={() => openEvent(null)}>
+                Add an event
               </button>
             </Empty>
           )}
@@ -81,8 +82,8 @@ export function DashboardView() {
             <ul>
               {data.upcoming.map((e) => {
                 const [s, en] = eventDayRange(e);
-                const dayLabel = s === addDaysKey(today, 1) ? "พรุ่งนี้" : formatDay(s, { weekday: "short", day: "numeric" });
-                const right = e.all_day ? (s === en ? "ทั้งวัน" : `${daysBetween(s, en) + 1} วัน`) : timeOf(e.start_at);
+                const dayLabel = s === addDaysKey(today, 1) ? "Tomorrow" : `${formatDay(s, { weekday: "short" })} ${Number(s.slice(8))}`;
+                const right = e.all_day ? (s === en ? "All day" : `${daysBetween(s, en) + 1} days`) : timeOf(e.start_at);
                 return (
                   <li key={e.id} className="border-t">
                     <button
@@ -101,7 +102,7 @@ export function DashboardView() {
               })}
             </ul>
           ) : (
-            !loading && <Empty>ไม่มีงานในอีก 7 วัน</Empty>
+            !loading && <Empty>Nothing in the next 7 days.</Empty>
           )}
         </div>
 
@@ -117,8 +118,8 @@ export function DashboardView() {
           <div>
             <SectionLabel>
               Recent notes
-              <Link href="/notes" className="ml-auto font-normal hover:text-foreground">
-                ดูทั้งหมด
+              <Link href="/notes" className="ml-auto font-normal hover:text-brand">
+                See all
               </Link>
             </SectionLabel>
             {data?.recentNotes.length ? (
@@ -136,7 +137,7 @@ export function DashboardView() {
                 ))}
               </ul>
             ) : (
-              <Empty>ยังไม่มีบันทึก จดอะไรไว้ในช่องด้านบนได้เลย</Empty>
+              <Empty>No notes yet. Write one in the quick note above.</Empty>
             )}
           </div>
         </div>
@@ -158,7 +159,7 @@ function TimelineItem({ event, onOpen, late }: { event: CalendarEvent; onOpen: (
       await api.updateEvent(event.id, { done });
       notifyChanged();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "อัปเดตไม่สำเร็จ");
+      toast.error(err instanceof Error ? err.message : "Couldn't update the event");
     }
   }
   const [start] = eventDayRange(event);
@@ -171,7 +172,7 @@ function TimelineItem({ event, onOpen, late }: { event: CalendarEvent; onOpen: (
       />
       <button type="button" onClick={() => onOpen(event)} className="min-w-0 flex-1 text-left">
         <span className={cn("block text-[13px] text-muted-foreground tabular-nums", late && "text-destructive")}>
-          {late ? `เลยกำหนดตั้งแต่ ${formatDay(start, { day: "numeric", month: "short" })}` : eventTimeLabel(event)}
+          {late ? `Overdue since ${formatDay(start, { month: "short", day: "numeric" })}` : eventTimeLabel(event)}
         </span>
         <span className={cn("block text-[17px] font-medium", event.done && "text-muted-foreground line-through")}>
           {event.title}
@@ -186,7 +187,7 @@ function TimelineItem({ event, onOpen, late }: { event: CalendarEvent; onOpen: (
         className="mt-1"
         checked={event.done}
         onCheckedChange={(v) => toggleDone(v === true)}
-        aria-label={event.done ? `ทำเครื่องหมายว่า ${event.title} ยังไม่เสร็จ` : `ทำเครื่องหมายว่า ${event.title} เสร็จแล้ว`}
+        aria-label={event.done ? `Mark ${event.title} as not done` : `Mark ${event.title} as done`}
       />
     </li>
   );
@@ -203,10 +204,10 @@ function QuickNote({ today }: { today: string }) {
     try {
       await api.createNote({ title: text.split("\n")[0].slice(0, 80), content: text, note_date: today });
       setContent("");
-      toast.success("จดบันทึกแล้ว");
+      toast.success("Note saved");
       notifyChanged();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
+      toast.error(err instanceof Error ? err.message : "Couldn't save the note");
     } finally {
       setSaving(false);
     }
@@ -215,8 +216,8 @@ function QuickNote({ today }: { today: string }) {
   return (
     <div className="rounded-[14px] border bg-card px-4 pt-3 pb-2.5">
       <Textarea
-        aria-label="จดด่วน"
-        placeholder="จดอะไรไว้หน่อย…"
+        aria-label="Quick note"
+        placeholder="Write something down…"
         rows={3}
         className="min-h-[72px] resize-none border-0 bg-transparent p-0 text-[15px] shadow-none focus-visible:ring-0 dark:bg-transparent"
         value={content}
@@ -229,10 +230,10 @@ function QuickNote({ today }: { today: string }) {
         }}
       />
       <div className="flex items-center justify-between pt-1">
-        <span className="text-xs text-muted-foreground">บรรทัดแรกเป็นหัวข้อ กด ⌘/Ctrl + Enter เพื่อบันทึก</span>
+        <span className="text-xs text-muted-foreground" title="⌘/Ctrl + Enter to save">First line is the title</span>
         <Button size="sm" variant={content.trim() ? "default" : "ghost"} className="rounded-full" onClick={save} disabled={saving || !content.trim()}>
           {saving && <Loader2 className="animate-spin" />}
-          บันทึก
+          Save note
         </Button>
       </div>
     </div>

@@ -18,17 +18,17 @@ export function MoneyCard() {
       {loading && !data && !error ? (
         <div className="h-24 animate-pulse rounded-lg bg-muted" />
       ) : error ? (
-        <p className="text-sm text-muted-foreground">ดึงข้อมูลจากแอปเงินไม่ได้: {error}</p>
+        <p className="text-sm text-muted-foreground">Couldn’t load money data. {error}.</p>
       ) : data ? (
         <>
           <dl className="grid grid-cols-3 gap-2">
-            <Figure label="รายรับ" value={data.income} />
-            <Figure label="รายจ่าย" value={data.expense} />
-            <Figure label="คงเหลือ" value={data.net} className={data.net < 0 ? "text-destructive" : "text-positive"} />
+            <Figure label="Income" value={data.income} />
+            <Figure label="Spent" value={data.expense} />
+            <Figure label="Left" value={data.net} className={data.net < 0 ? "text-destructive" : "text-positive"} />
           </dl>
           {shown.length > 0 && (
             <>
-              <div className="mt-4 flex h-1 overflow-hidden rounded-full bg-muted" role="img" aria-label="สัดส่วนรายจ่ายตามหมวด">
+              <div className="mt-4 flex h-1 overflow-hidden rounded-full bg-muted" role="img" aria-label="Spending by category">
                 {shown.map((c) => (
                   <span key={c.id} className="h-full" style={{ width: `${(c.amount / total) * 100}%`, background: c.color }} />
                 ))}
@@ -40,7 +40,7 @@ export function MoneyCard() {
                     <li key={c.id} title={`${c.name} ${formatBaht(c.amount)}`} className={cn(over && "text-destructive")}>
                       <span className="mr-1.5 inline-block size-[7px] rounded-full" style={{ background: c.color }} />
                       {c.name}
-                      {over && " เกินงบ"}
+                      {over && " over budget"}
                     </li>
                   );
                 })}
@@ -51,9 +51,9 @@ export function MoneyCard() {
             href={MONEY_APP_URL}
             target="_blank"
             rel="noreferrer"
-            className="mt-3 inline-flex items-center gap-1 text-[12.5px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            className="mt-3 inline-flex items-center gap-1 text-[12.5px] text-muted-foreground underline-offset-4 hover:text-brand hover:underline"
           >
-            เปิดแอปเงิน <ExternalLink className="size-3" />
+            Open money app <ExternalLink className="size-3" />
           </a>
         </>
       ) : null}

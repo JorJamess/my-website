@@ -33,7 +33,7 @@ async function ctx() {
 
 function parseOrThrow(value: string, tz: string, field: string) {
   const d = parseLocal(value, tz);
-  if (!isValidDate(d)) throw new InputError(`รูปแบบเวลาไม่ถูกต้อง: ${field}="${value}"`);
+  if (!isValidDate(d)) throw new InputError(`Invalid date or time for ${field}: "${value}"`);
   return d;
 }
 
@@ -55,7 +55,7 @@ function resolveTimes(
   }
   const s = parseOrThrow(start, tz, "start");
   const e = end ? parseOrThrow(end, tz, "end") : null;
-  if (e && e < s) throw new InputError("เวลาสิ้นสุดต้องไม่ก่อนเวลาเริ่ม");
+  if (e && e < s) throw new InputError("End time can't be before the start time");
   return { start_at: s.toISOString(), end_at: e ? e.toISOString() : null };
 }
 
@@ -217,7 +217,7 @@ export async function getNote(id: string): Promise<Note | null> {
 
 async function assertEventExists(eventId: string | null | undefined) {
   if (!eventId) return;
-  if (!(await getEvent(eventId))) throw new InputError(`ไม่พบงาน id=${eventId}`);
+  if (!(await getEvent(eventId))) throw new InputError(`No event with id ${eventId}`);
 }
 
 export async function createNote(input: NoteCreateInput): Promise<Note> {

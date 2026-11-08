@@ -19,8 +19,8 @@ const emptyDraft = (): Draft => ({ title: "", content: "", note_date: localDateK
 function relative(iso: string) {
   const key = localDateKey(new Date(iso));
   const today = localDateKey();
-  if (key === today) return new Date(iso).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" });
-  return formatDay(key, { day: "numeric", month: "short" });
+  if (key === today) return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" });
+  return formatDay(key, { month: "short", day: "numeric" });
 }
 
 export function NotesView() {
@@ -45,7 +45,7 @@ export function NotesView() {
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-[26px] font-medium tracking-tight">Notes</h1>
         <Button className="rounded-full px-4" onClick={() => setSelectedId("new")}>
-          <Plus /> บันทึกใหม่
+          <Plus /> New note
         </Button>
       </div>
 
@@ -54,12 +54,12 @@ export function NotesView() {
         <div className={cn("space-y-3", editorOpen && "hidden md:block")}>
           <div className="relative">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input className="pl-8" placeholder="ค้นหาบันทึก…" value={q} onChange={(e) => setQ(e.target.value)} />
+            <Input className="pl-8" placeholder="Search notes…" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           <div className="space-y-1">
             {loading && !notes && <div className="h-16 animate-pulse rounded-lg bg-muted" />}
             {notes?.length === 0 && (
-              <p className="py-8 text-center text-sm text-muted-foreground">{debounced ? "ไม่พบบันทึกที่ค้นหา" : "ยังไม่มีบันทึก"}</p>
+              <p className="py-8 text-center text-sm text-muted-foreground">{debounced ? "No notes match your search." : "No notes yet."}</p>
             )}
             {notes?.map((n) => (
               <button
@@ -92,7 +92,7 @@ export function NotesView() {
         ) : (
           <Card className="hidden items-center justify-center py-20 text-center text-sm text-muted-foreground md:flex">
             <NotebookPen className="size-6" />
-            <p>เลือกบันทึกทางซ้าย หรือสร้างบันทึกใหม่</p>
+            <p>Pick a note on the left, or start a new one.</p>
           </Card>
         )}
       </div>
@@ -126,7 +126,7 @@ function NoteEditor({
 
   async function save() {
     const title = draft.title.trim() || draft.content.trim().split("\n")[0].slice(0, 80);
-    if (!title) return toast.error("ใส่หัวข้อหรือเนื้อหาก่อน");
+    if (!title) return toast.error("Add a title or some text first");
     setSaving(true);
     try {
       const payload = { title, content: draft.content, note_date: draft.note_date || null, pinned: draft.pinned };
@@ -136,10 +136,10 @@ function NoteEditor({
         const n = await api.createNote({ ...payload, note_date: payload.note_date ?? undefined });
         onSaved(n.id);
       }
-      toast.success("บันทึกแล้ว");
+      toast.success("Note saved");
       notifyChanged();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
+      toast.error(err instanceof Error ? err.message : "Couldn't save the note");
     } finally {
       setSaving(false);
     }
@@ -151,17 +151,17 @@ function NoteEditor({
     try {
       await api.deleteNote(note.id);
       onClose();
-      toast.success("ลบบันทึกแล้ว");
+      toast.success("Note deleted");
       notifyChanged();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "ลบไม่สำเร็จ");
+      toast.error(err instanceof Error ? err.message : "Couldn't delete the note");
     }
   }
 
   return (
     <Card className="gap-3 px-4 py-4">
       <div className="flex items-center gap-1">
-        <Button variant="ghost" size="icon-sm" className="md:hidden" aria-label="กลับ" onClick={onClose}>
+        <Button variant="ghost" size="icon-sm" className="md:hidden" aria-label="Back to notes" onClick={onClose}>
           <ArrowLeft />
         </Button>
         <Input
@@ -169,39 +169,39 @@ function NoteEditor({
           className="h-8 w-auto"
           value={draft.note_date}
           onChange={(e) => setDraft((d) => ({ ...d, note_date: e.target.value }))}
-          aria-label="วันที่ของบันทึก"
+          aria-label="Note date"
         />
         <div className="ml-auto flex items-center gap-1">
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label={draft.pinned ? "เลิกปักหมุด" : "ปักหมุด"}
-            title={draft.pinned ? "เลิกปักหมุด" : "ปักหมุด"}
+            aria-label={draft.pinned ? "Unpin note" : "Pin note"}
+            title={draft.pinned ? "Unpin note" : "Pin note"}
             onClick={() => setDraft((d) => ({ ...d, pinned: !d.pinned }))}
           >
             {draft.pinned ? <PinOff /> : <Pin />}
           </Button>
           {note && (
-            <Button variant="ghost" size={confirmDelete ? "sm" : "icon-sm"} aria-label="ลบ" onClick={remove} className="text-destructive">
+            <Button variant="ghost" size={confirmDelete ? "sm" : "icon-sm"} aria-label="Delete note" onClick={remove} className="text-destructive">
               <Trash2 />
-              {confirmDelete && "ยืนยันลบ"}
+              {confirmDelete && "Click again to delete"}
             </Button>
           )}
           <Button size="sm" className="rounded-full px-3" onClick={save} disabled={saving || !dirty}>
             {saving && <Loader2 className="animate-spin" />}
-            บันทึก
+            Save note
           </Button>
         </div>
       </div>
       <Input
-        placeholder="หัวข้อ"
+        placeholder="Title"
         autoFocus={!note}
         className="h-auto border-0 px-0 text-[22px] font-medium tracking-tight shadow-none focus-visible:ring-0 md:text-[22px] dark:bg-transparent"
         value={draft.title}
         onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
       />
       <Textarea
-        placeholder="เริ่มเขียน… (รองรับ Markdown)"
+        placeholder="Start writing… Markdown works."
         className="min-h-[50dvh] resize-none border-0 px-0 shadow-none focus-visible:ring-0 dark:bg-transparent"
         value={draft.content}
         onChange={(e) => setDraft((d) => ({ ...d, content: e.target.value }))}
@@ -213,8 +213,8 @@ function NoteEditor({
         }}
       />
       <p className="text-xs text-muted-foreground">
-        {note && <>แก้ไขล่าสุด {new Date(note.updated_at).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })} </>}
-        กด ⌘/Ctrl + S เพื่อบันทึก
+        {note && <>Edited {new Date(note.updated_at).toLocaleString("en-US", { timeZone: "Asia/Bangkok", dateStyle: "medium", timeStyle: "short" })}. </>}
+        ⌘/Ctrl + S to save.
       </p>
     </Card>
   );

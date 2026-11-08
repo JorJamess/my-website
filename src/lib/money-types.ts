@@ -39,7 +39,7 @@ export type MoneyRecurring = {
 
 export type MoneyCalendar = { days: MoneyDay[]; recurring: MoneyRecurring[] };
 
-const baht = new Intl.NumberFormat("th-TH", { style: "currency", currency: "THB", maximumFractionDigits: 2, minimumFractionDigits: 0 });
+const baht = new Intl.NumberFormat("en-US", { style: "currency", currency: "THB", currencyDisplay: "narrowSymbol", maximumFractionDigits: 2, minimumFractionDigits: 0 });
 export const formatBaht = (n: number) => baht.format(n);
 export const formatBahtShort = (n: number) =>
-  n >= 10_000 ? `฿${(n / 1000).toLocaleString("th-TH", { maximumFractionDigits: 1 })}k` : `฿${Math.round(n).toLocaleString("th-TH")}`;
+  n >= 10_000 ? `฿${(n / 1000).toLocaleString("en-US", { maximumFractionDigits: 1 })}k` : `฿${Math.round(n).toLocaleString("en-US")}`;
