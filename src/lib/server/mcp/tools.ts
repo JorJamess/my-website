@@ -7,6 +7,7 @@ import {
   noteUpdateSchema,
 } from "@/lib/schemas";
 import * as repo from "@/lib/server/repo";
+import { listMessages, setMessageRead } from "@/lib/server/messages";
 import { addDaysKey, formatLocal, localDateKey } from "@/lib/time";
 import type { CalendarEvent, Note } from "@/lib/types";
 
@@ -213,6 +214,38 @@ export const tools: ToolDef[] = [
     },
   }),
 ];
+
+tools.push(
+  define({
+    name: "list_messages",
+    title: "อ่านข้อความติดต่อ",
+    description:
+      "ข้อความที่คนส่งมาจากฟอร์มติดต่อบนหน้า Portfolio (บริษัทเรื่องฝึกงาน หรือลูกค้าฟรีแลนซ์) เรียงใหม่ไปเก่า พร้อมจำนวนที่ยังไม่อ่าน",
+    schema: z.object({
+      unread_only: z.boolean().optional().describe("เฉพาะที่ยังไม่อ่าน"),
+      limit: z.number().int().min(1).max(100).optional(),
+    }),
+    annotations: { readOnlyHint: true },
+    run: async ({ unread_only, limit }, tz) => {
+      const r = await listMessages({ unreadOnly: unread_only, limit: limit ?? 20 });
+      return {
+        unread: r.unread,
+        messages: r.messages.map((m) => ({ ...m, created_at: formatLocal(m.created_at, tz) })),
+      };
+    },
+  }),
+  define({
+    name: "mark_message_read",
+    title: "ทำเครื่องหมายว่าอ่านแล้ว",
+    description: "ทำเครื่องหมายข้อความติดต่อว่าอ่านแล้ว (หรือยังไม่อ่าน) ตาม id",
+    schema: z.object({ id, read: z.boolean().optional().describe("ค่าเริ่มต้น true") }),
+    annotations: { idempotentHint: true },
+    run: async ({ id, read }) => {
+      if (!(await setMessageRead(id, read ?? true))) throw new repo.InputError(`ไม่พบข้อความ id=${id}`);
+      return { id, read: read ?? true };
+    },
+  }),
+);
 
 export function toolList() {
   return tools.map((t) => {

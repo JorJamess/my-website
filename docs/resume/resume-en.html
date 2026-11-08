@@ -1,0 +1,33 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Komol Bunrueang, resume</title>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&family=Anuphan:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+@page { size: A4; margin: 16mm 16mm 14mm; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font: 10.5pt/1.5 "Hanken Grotesk", "Anuphan", sans-serif; color: #0b0c0e; }
+header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1.5px solid #0b0c0e; padding-bottom: 10px; margin-bottom: 14px; }
+h1 { font-size: 24pt; font-weight: 500; letter-spacing: -0.02em; line-height: 1.1; }
+.role { color: #1f2de6; font-weight: 500; margin-top: 2px; }
+.contact { text-align: right; font-size: 9.5pt; color: #3a3f48; line-height: 1.6; }
+.contact a { color: inherit; text-decoration: none; }
+.pupu { width: 52px; height: 52px; margin-right: 12px; }
+.id { display: flex; align-items: flex-end; }
+h2 { font-size: 10pt; font-weight: 600; color: #1f2de6; margin: 14px 0 6px; }
+.row { display: flex; justify-content: space-between; gap: 12px; }
+.row b { font-weight: 600; }
+.muted { color: #5d6470; }
+.item { margin-bottom: 9px; }
+ul { padding-left: 16px; margin-top: 2px; }
+li { margin-bottom: 1px; }
+.tags { color: #3a3f48; font-size: 9.5pt; }
+</style></head><body>
+<header><div class="id"><img class="pupu" src="../../public/pupu.svg" alt=""><div><h1>Komol Bunrueang</h1><div class="role">Computer engineering student and web developer</div></div></div>
+<div class="contact"><a href="mailto:komolbunrueang@gmail.com">komolbunrueang@gmail.com</a><br><a href="https://github.com/JorJamess">github.com/JorJamess</a><br><a href="https://my-website.komolbunrueang.workers.dev">my-website.komolbunrueang.workers.dev</a></div></header>
+<p>Year-two computer engineering student at Thammasat University. I like the moment code turns into something people use, and I build and ship small web apps for my own daily life. Next I want to learn how computer networks work.</p>
+<h2>Education</h2>
+<div class="item"><div class="row"><b>Thammasat University</b><span class="muted">Expected to graduate in 2029</span></div><div>Bachelor of Engineering, Computer Engineering, year two</div></div>
+<h2>Projects</h2><div class="item"><div class="row"><b>jameswebpupu</b><span class="muted">2026</span></div><div class="muted">A personal planner: calendar, notes and a money summary, at my-website.komolbunrueang.workers.dev</div><ul><li>Calendar, notes and quick capture; Claude can add events and notes through an MCP server I connected</li><li>Runs on Cloudflare Workers with a D1 database; every push to GitHub deploys it</li><li>Password login with a lockout after repeated wrong tries, and weekly backups</li><li>Built together with Claude Code: I decided the features, reviewed each change and deployed it</li></ul><div class="tags">Next.js, TypeScript, Cloudflare Workers, D1, MCP. Code: github.com/JorJamess/my-website</div></div><div class="item"><div class="row"><b>Expenses</b><span class="muted">2026</span></div><div class="muted">An income and spending tracker for my monthly money</div><ul><li>Transactions by category and wallet, monthly budgets and recurring bills</li><li>Its own login, an MCP server for Claude, and a read-only API that feeds jameswebpupu</li><li>Built together with Claude Code</li></ul><div class="tags">Next.js, Cloudflare Workers, D1, MCP. Code is private.</div></div>
+<h2>Skills</h2>
+<ul><li>Python: the basics, not yet with libraries</li><li>Java: up to recursion</li><li>JavaScript: the basics</li><li>Git: intermediate, used every day</li><li>Used in my projects with Claude Code: Next.js, TypeScript, Cloudflare Workers and D1, MCP</li></ul>
+<h2>Looking for</h2>
+<ul><li>An internship in summer 2027</li><li>Freelance work: websites for shops and people, web apps and back-office systems</li></ul>
+</body></html>

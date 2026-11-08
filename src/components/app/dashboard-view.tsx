@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { EventDialog } from "./event-dialog";
+import { MessagesCard } from "./messages-card";
 import { MoneyCard } from "./money-card";
 import { Pupu } from "./pupu";
 
@@ -132,6 +133,7 @@ export function DashboardView() {
         </div>
 
         <div className="min-w-0 space-y-8">
+          <MessagesCard />
           <div>
             <SectionLabel>Money this month</SectionLabel>
             <MoneyCard />
@@ -143,7 +145,7 @@ export function DashboardView() {
           <div>
             <SectionLabel>
               Recent notes
-              <Link href="/notes" className="ml-auto font-normal hover:text-brand">
+              <Link href="/app/notes" className="ml-auto font-normal hover:text-brand">
                 See all
               </Link>
             </SectionLabel>
@@ -151,7 +153,7 @@ export function DashboardView() {
               <ul>
                 {data.recentNotes.map((n) => (
                   <li key={n.id} className="border-t">
-                    <Link href={`/notes?id=${n.id}`} className="block py-2.5 transition-colors hover:bg-muted/40">
+                    <Link href={`/app/notes?id=${n.id}`} className="block py-2.5 transition-colors hover:bg-muted/40">
                       <span className="flex items-center gap-1.5 text-[15px]">
                         {n.pinned && <Pin className="size-3 shrink-0 text-muted-foreground" />}
                         <span className="truncate">{n.title}</span>

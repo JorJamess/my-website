@@ -167,7 +167,7 @@ function Planner({ day }: { day?: number | string }) {
   return (
     <>
       <g stroke={INK} strokeWidth={8} strokeLinejoin="round">
-        <rect x="150" y="282" width="100" height="72" rx="10" fill="#2952E3" />
+        <rect x="150" y="282" width="100" height="72" rx="10" fill="var(--brand, #1F2DE6)" />
         <path d="M150 300 H250" stroke="#fff" strokeWidth={6} opacity={0.9} />
         <path d="M172 276 V290 M228 276 V290" strokeLinecap="round" />
       </g>
@@ -193,7 +193,7 @@ function Notebook() {
     <g stroke={INK} strokeWidth={8} strokeLinejoin="round">
       <path d="M128 290 L200 300 L272 290 L272 352 L200 360 L128 352 Z" fill="#fff" />
       <path d="M200 300 V360" />
-      <g stroke="#2952E3" strokeWidth={5} strokeLinecap="round" opacity={0.85}>
+      <g stroke="var(--brand, #1F2DE6)" strokeWidth={5} strokeLinecap="round" opacity={0.85}>
         <path d="M144 312 L186 317 M144 328 L186 333 M214 317 L256 312" />
       </g>
       {/* pencil */}
@@ -231,7 +231,7 @@ function Magnifier() {
   return (
     <g stroke={INK} strokeWidth={8} strokeLinecap="round">
       <path d="M262 334 L300 372" strokeWidth={16} />
-      <path d="M262 334 L300 372" stroke="#2952E3" strokeWidth={8} />
+      <path d="M262 334 L300 372" stroke="var(--brand, #1F2DE6)" strokeWidth={8} />
       <circle cx="230" cy="302" r="40" fill="#E3EEFF" />
       <path d="M210 288 Q216 276 230 274" fill="none" stroke="#fff" strokeWidth={7} />
     </g>

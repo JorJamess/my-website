@@ -74,6 +74,14 @@ export const api = {
     ).then((r) => r.backups),
   backupNow: () => request<{ backup: { key: string } }>("/api/backups", json("POST")),
 
+  messages: () =>
+    request<{
+      unread: number;
+      messages: { id: string; name: string; email: string; topic: string; body: string; lang: string; read: boolean; created_at: string }[];
+    }>("/api/messages"),
+  markMessage: (id: string, read: boolean) => request<{ ok: true }>(`/api/messages/${id}`, json("PATCH", { read })),
+  deleteMessage: (id: string) => request<{ ok: true }>(`/api/messages/${id}`, json("DELETE")),
+
   connect: () =>
     request<{ configured: boolean; origin: string; urlWithKey: string | null; urlBearer: string; token: string | null }>(
       "/api/connect",

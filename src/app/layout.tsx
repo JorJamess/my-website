@@ -1,8 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import { Anuphan, Geist_Mono } from "next/font/google";
+import { Anuphan, Geist_Mono, Hanken_Grotesk } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
-import { AppShell } from "@/components/app/app-shell";
 import "./globals.css";
 
 const anuphan = Anuphan({
@@ -10,6 +9,7 @@ const anuphan = Anuphan({
   subsets: ["thai", "latin"],
   weight: ["300", "400", "500", "600"],
 });
+const hanken = Hanken_Grotesk({ variable: "--font-hanken", subsets: ["latin"], weight: ["400", "500", "600"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
@@ -22,8 +22,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#FBFBFA" },
-    { media: "(prefers-color-scheme: dark)", color: "#141517" },
+    { media: "(prefers-color-scheme: light)", color: "#EEF0F3" },
+    { media: "(prefers-color-scheme: dark)", color: "#0B0C0E" },
   ],
 };
 
@@ -32,11 +32,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${anuphan.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${hanken.variable} ${anuphan.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-background">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <AppShell>{children}</AppShell>
+          {children}
           <Toaster position="top-center" />
         </ThemeProvider>
       </body>

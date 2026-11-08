@@ -14,10 +14,10 @@ import { Pupu } from "./pupu";
 export const SITE_NAME = "jameswebpupu";
 
 const NAV = [
-  { href: "/", label: "Today", icon: LayoutGrid },
-  { href: "/calendar", label: "Calendar", icon: CalendarDays },
-  { href: "/notes", label: "Notes", icon: NotebookPen },
-  { href: "/connect", label: "Claude", icon: Plug },
+  { href: "/app", label: "Today", icon: LayoutGrid },
+  { href: "/app/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/app/notes", label: "Notes", icon: NotebookPen },
+  { href: "/app/connect", label: "Claude", icon: Plug },
 ] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -42,13 +42,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   if (!authed) return <LoginScreen onSuccess={() => setAuthed(true)} />;
 
-  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  const isActive = (href: string) => (href === "/app" ? pathname === "/app" : pathname.startsWith(href));
 
   return (
     <div className="flex min-h-dvh">
       {/* Sidebar (desktop) */}
       <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 flex-col border-r px-4 py-7 md:flex">
-        <Link href="/" className="group/pupu mb-6 flex items-center gap-2 px-1.5 text-[15px] font-semibold tracking-tight">
+        <Link href="/app" className="group/pupu mb-6 flex items-center gap-2 px-1.5 text-[15px] font-semibold tracking-tight">
           <Pupu size={30} />
           {SITE_NAME}
         </Link>
@@ -69,7 +69,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
         <div className="mt-auto flex items-center gap-0.5">
-          <SettingsLink active={pathname.startsWith("/settings")} />
+          <SettingsLink active={pathname.startsWith("/app/settings")} />
           <ThemeToggle />
           <LogoutButton onDone={() => setAuthed(false)} />
           <span className="ml-auto pr-1 font-mono text-[10px] text-muted-foreground/60" title="Deployed version">
@@ -81,12 +81,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Top bar (mobile) */}
         <header className="sticky top-0 z-30 flex h-12 items-center justify-between border-b bg-background/85 px-4 backdrop-blur md:hidden">
-          <Link href="/" className="group/pupu flex items-center gap-1.5 text-[15px] font-semibold tracking-tight">
+          <Link href="/app" className="group/pupu flex items-center gap-1.5 text-[15px] font-semibold tracking-tight">
             <Pupu size={26} />
             {SITE_NAME}
           </Link>
           <div className="flex items-center gap-0.5">
-            <SettingsLink active={pathname.startsWith("/settings")} />
+            <SettingsLink active={pathname.startsWith("/app/settings")} />
             <ThemeToggle />
             <LogoutButton onDone={() => setAuthed(false)} />
           </div>
@@ -121,7 +121,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 function SettingsLink({ active }: { active: boolean }) {
   return (
     <Button variant="ghost" size="icon-sm" asChild className={cn(active && "bg-brand-soft text-brand")}>
-      <Link href="/settings" aria-label="Settings" title="Settings" aria-current={active ? "page" : undefined}>
+      <Link href="/app/settings" aria-label="Settings" title="Settings" aria-current={active ? "page" : undefined}>
         <Settings />
       </Link>
     </Button>

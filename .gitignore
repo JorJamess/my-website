@@ -49,3 +49,10 @@ next-env.d.ts
 # รูปต้นฉบับของไอคอน (มีลายน้ำ ไม่ต้องขึ้น git)
 IMG_*.JPG
 IMG_*.jpg
+
+# design skill working files
+.taste-skill
+shots
+
+# คำตอบเรื่อง Portfolio (ส่วนตัว ไม่ขึ้น git)
+docs/portfolio-brief.md

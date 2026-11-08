@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+  <title>Pupu writing</title>
+  <g stroke="#3B2A22" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M150 150 C120 90 118 38 146 30 C176 22 186 86 182 140" fill="#FFF7E8"/>
+    <path d="M150 120 C140 86 140 56 150 52 C162 48 168 84 168 118" fill="#FFC4CF" stroke="none"/>
+    <path d="M250 150 C280 90 290 44 262 34 C232 26 220 86 222 140" fill="#FFF7E8"/>
+    <path d="M252 120 C262 86 264 60 256 56 C244 52 236 86 236 118" fill="#FFC4CF" stroke="none"/>
+    <path d="M200 132 C292 132 338 196 338 262 C338 326 280 358 200 358 C120 358 62 326 62 262 C62 196 108 132 200 132 Z" fill="#FFF7E8"/>
+    <path d="M150 352 C150 370 182 370 182 352" fill="#FFF7E8"/>
+    <path d="M218 352 C218 370 250 370 250 352" fill="#FFF7E8"/>
+  </g>
+  <circle cx="160" cy="238" r="13" fill="#3B2A22"/><circle cx="164" cy="233" r="4.5" fill="#fff"/>
+  <circle cx="240" cy="238" r="13" fill="#3B2A22"/><circle cx="244" cy="233" r="4.5" fill="#fff"/>
+  <ellipse cx="128" cy="262" rx="19" ry="11" fill="#FFB3C1" opacity=".75"/>
+  <ellipse cx="272" cy="262" rx="19" ry="11" fill="#FFB3C1" opacity=".75"/>
+  <path d="M186 254 Q193 264 200 254 Q207 264 214 254" fill="none" stroke="#3B2A22" stroke-width="6" stroke-linecap="round"/>
+  <g stroke="#3B2A22" stroke-width="8" stroke-linejoin="round">
+    <path d="M128 290 L200 300 L272 290 L272 352 L200 360 L128 352 Z" fill="#fff"/>
+    <path d="M200 300 V360"/>
+    <g stroke="#1F2DE6" stroke-width="5" stroke-linecap="round" opacity=".85"><path d="M144 312 L186 317 M144 328 L186 333 M214 317 L256 312"/></g>
+    <g transform="rotate(38 262 300)">
+      <rect x="252" y="236" width="22" height="70" rx="4" fill="#FFD24D"/>
+      <rect x="252" y="230" width="22" height="14" rx="4" fill="#FFC4CF"/>
+      <path d="M252 306 L263 330 L274 306 Z" fill="#FFF7E8"/>
+    </g>
+  </g>
+  <g stroke="#3B2A22" stroke-width="8" fill="#FFF7E8">
+    <ellipse cx="138" cy="318" rx="18" ry="15"/><ellipse cx="256" cy="304" rx="18" ry="15"/>
+  </g>
+</svg>
