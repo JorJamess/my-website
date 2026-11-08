@@ -45,3 +45,7 @@ next-env.d.ts
 .wrangler
 .dev.vars
 !.dev.vars.example
+
+# รูปต้นฉบับของไอคอน (มีลายน้ำ ไม่ต้องขึ้น git)
+IMG_*.JPG
+IMG_*.jpg
