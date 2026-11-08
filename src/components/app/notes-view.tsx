@@ -67,7 +67,7 @@ export function NotesView() {
                 type="button"
                 onClick={() => setSelectedId(n.id)}
                 className={cn(
-                  "block w-full rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted/60",
+                  "block w-full rounded-lg px-3 py-2.5 text-left transition-colors duration-200 hover:bg-muted/60",
                   selectedId === n.id && "bg-muted",
                 )}
               >
@@ -159,7 +159,7 @@ function NoteEditor({
   }
 
   return (
-    <Card className="gap-3 px-4 py-4">
+    <Card className="motion-fade gap-3 px-4 py-4">
       <div className="flex items-center gap-1">
         <Button variant="ghost" size="icon-sm" className="md:hidden" aria-label="Back to notes" onClick={onClose}>
           <ArrowLeft />

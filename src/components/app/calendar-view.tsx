@@ -40,6 +40,8 @@ export function CalendarView() {
   const today = localDateKey();
   const [month, setMonth] = useState(today.slice(0, 7));
   const [selected, setSelected] = useState(today);
+  // ทิศทางที่เพิ่งเลื่อนเดือน ใช้เลือก animation ของตาราง
+  const [dir, setDir] = useState<"next" | "prev" | null>(null);
   const [dialog, setDialog] = useState<{ open: boolean; event: CalendarEvent | null; date?: string }>({
     open: false,
     event: null,
@@ -79,6 +81,7 @@ export function CalendarView() {
 
   const goto = (delta: number) => {
     const m = shiftMonth(month, delta);
+    setDir(delta > 0 ? "next" : "prev");
     setMonth(m);
     setSelected(m === today.slice(0, 7) ? today : `${m}-01`);
   };
@@ -99,7 +102,9 @@ export function CalendarView() {
           <Button
             variant="outline"
             onClick={() => {
-              setMonth(today.slice(0, 7));
+              const m = today.slice(0, 7);
+              if (m !== month) setDir(m > month ? "next" : "prev");
+              setMonth(m);
               setSelected(today);
             }}
           >
@@ -123,7 +128,14 @@ export function CalendarView() {
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-7 grid-rows-6">
+          <div
+            key={month}
+            className={cn(
+              "grid grid-cols-7 grid-rows-6",
+              dir === "next" && "motion-from-right",
+              dir === "prev" && "motion-from-left",
+            )}
+          >
             {days.map((key, i) => {
               const inMonth = key.startsWith(month);
               const list = byDay.get(key) ?? [];
@@ -144,7 +156,7 @@ export function CalendarView() {
                     if (e.key === "Enter") setSelected(key);
                   }}
                   className={cn(
-                    "group relative flex min-h-16 cursor-pointer flex-col gap-0.5 border-b border-r p-1 text-left outline-none transition-colors hover:bg-muted/50 focus-visible:bg-muted sm:min-h-24 sm:p-1.5",
+                    "group relative flex min-h-16 cursor-pointer flex-col gap-0.5 border-b border-r p-1 text-left outline-none transition-colors duration-200 hover:bg-muted/50 focus-visible:bg-muted sm:min-h-24 sm:p-1.5",
                     i % 7 === 6 && "border-r-0",
                     i >= 35 && "border-b-0",
                     !inMonth && "bg-muted/30 text-muted-foreground",
@@ -189,7 +201,7 @@ export function CalendarView() {
                           openEvent(e);
                         }}
                         className={cn(
-                          "truncate rounded px-1 py-0.5 text-left text-[11px] leading-tight",
+                          "truncate rounded px-1 py-0.5 text-left text-[11px] leading-tight transition-transform duration-150 hover:-translate-y-px",
                           COLOR_CLASSES[e.color].chip,
                           e.done && "line-through opacity-60",
                         )}
@@ -216,14 +228,14 @@ export function CalendarView() {
 
         <Card className="h-fit lg:sticky lg:top-8">
           <CardHeader>
-            <CardTitle>{formatDay(selected, { weekday: "long", day: "numeric", month: "long" })}</CardTitle>
+            <CardTitle key={selected} className="motion-fade">{formatDay(selected, { weekday: "long", day: "numeric", month: "long" })}</CardTitle>
             <CardAction>
               <Button variant="ghost" size="icon-sm" aria-label="Add an event on this day" onClick={() => openNew(selected)}>
                 <Plus />
               </Button>
             </CardAction>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent key={selected} className="motion-fade space-y-3">
             {selectedEvents.length ? (
               <div className="-mx-2">
                 {selectedEvents.map((e) => (

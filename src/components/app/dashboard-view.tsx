@@ -37,10 +37,10 @@ export function DashboardView() {
   return (
     <div>
       <header className="flex flex-wrap items-end gap-x-6 gap-y-4 border-b pb-7">
-        <p className="text-[72px] leading-[0.85] font-light tracking-[-0.04em] text-brand tabular-nums md:text-[96px]">
+        <p className="motion-rise text-[72px] leading-[0.85] font-semibold tracking-[-0.05em] text-brand tabular-nums md:text-[96px]">
           {today.slice(8)}
         </p>
-        <div className="pb-1">
+        <div className="motion-rise pb-1" style={{ "--d": "90ms" } as React.CSSProperties}>
           <h1 className="text-[22px] font-medium">{formatDay(today, { weekday: "long" })}</h1>
           <p className="text-[15px] text-muted-foreground">{formatDay(today, { month: "long", year: "numeric" })}</p>
         </div>
@@ -60,12 +60,12 @@ export function DashboardView() {
           {loading && !data ? (
             <Skeleton />
           ) : data && (data.todayEvents.length || data.overdue.length) ? (
-            <ol className="relative pl-[22px] before:absolute before:top-1.5 before:bottom-1.5 before:left-1 before:w-px before:bg-border">
-              {data.overdue.map((e) => (
-                <TimelineItem key={e.id} event={e} onOpen={openEvent} late />
+            <ol className="timeline relative pl-[22px] before:absolute before:top-1.5 before:bottom-1.5 before:left-1 before:w-px before:bg-border">
+              {data.overdue.map((e, i) => (
+                <TimelineItem key={e.id} event={e} onOpen={openEvent} index={i} late />
               ))}
-              {data.todayEvents.map((e) => (
-                <TimelineItem key={e.id} event={e} onOpen={openEvent} />
+              {data.todayEvents.map((e, i) => (
+                <TimelineItem key={e.id} event={e} onOpen={openEvent} index={data.overdue.length + i} />
               ))}
             </ol>
           ) : (
@@ -91,9 +91,11 @@ export function DashboardView() {
                       className="grid w-full grid-cols-[84px_1fr_auto] items-baseline gap-3 py-3 text-left text-[15px] transition-colors hover:bg-muted/40"
                     >
                       <span className="text-muted-foreground">{dayLabel}</span>
-                      <span className={cn("truncate", e.done && "text-muted-foreground line-through")}>
+                      <span className="truncate">
                         <span className="mr-2 inline-block size-[7px] -translate-y-px rounded-full" style={{ background: COLOR_HEX[e.color] }} />
-                        {e.title}
+                        <span className="strike-line" data-done={e.done}>
+                          {e.title}
+                        </span>
                       </span>
                       <span className="text-muted-foreground tabular-nums">{right}</span>
                     </button>
@@ -153,7 +155,18 @@ export function DashboardView() {
   );
 }
 
-function TimelineItem({ event, onOpen, late }: { event: CalendarEvent; onOpen: (e: CalendarEvent) => void; late?: boolean }) {
+function TimelineItem({
+  event,
+  onOpen,
+  index,
+  late,
+}: {
+  event: CalendarEvent;
+  onOpen: (e: CalendarEvent) => void;
+  index: number;
+  late?: boolean;
+}) {
+  const delay = { "--d": `${250 + index * 90}ms` } as React.CSSProperties;
   async function toggleDone(done: boolean) {
     try {
       await api.updateEvent(event.id, { done });
@@ -167,15 +180,17 @@ function TimelineItem({ event, onOpen, late }: { event: CalendarEvent; onOpen: (
     <li className="relative flex items-start gap-3 pb-5 last:pb-1">
       <span
         aria-hidden
-        className="absolute top-[7px] -left-[22px] size-[9px] rounded-full ring-[3px] ring-background"
-        style={{ background: COLOR_HEX[event.color] }}
+        className="motion-pop absolute top-[7px] -left-[22px] size-[9px] rounded-full ring-[3px] ring-background"
+        style={{ background: COLOR_HEX[event.color], ...delay }}
       />
-      <button type="button" onClick={() => onOpen(event)} className="min-w-0 flex-1 text-left">
+      <button type="button" onClick={() => onOpen(event)} className="motion-rise min-w-0 flex-1 text-left" style={delay}>
         <span className={cn("block text-[13px] text-muted-foreground tabular-nums", late && "text-destructive")}>
           {late ? `Overdue since ${formatDay(start, { month: "short", day: "numeric" })}` : eventTimeLabel(event)}
         </span>
-        <span className={cn("block text-[17px] font-medium", event.done && "text-muted-foreground line-through")}>
-          {event.title}
+        <span className="block text-[17px] font-medium">
+          <span className="strike-line" data-done={event.done}>
+            {event.title}
+          </span>
         </span>
         {event.location && (
           <span className="flex items-center gap-1 text-[13.5px] text-muted-foreground">

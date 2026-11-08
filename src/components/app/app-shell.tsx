@@ -87,7 +87,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1080px] flex-1 px-4 pt-6 pb-24 md:px-12 md:py-10">{children}</main>
+        <main key={pathname} className="motion-fade mx-auto w-full max-w-[1080px] flex-1 px-4 pt-6 pb-24 md:px-12 md:py-10">
+          {children}
+        </main>
 
         {/* Bottom nav (mobile) */}
         <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">

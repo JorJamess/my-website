@@ -38,8 +38,10 @@ export function EventRow({
       <button type="button" onClick={() => onOpen(event)} className="flex min-w-0 flex-1 items-start gap-2.5 text-left">
         <span className={cn("mt-1 h-3.5 w-1 shrink-0 rounded-full", COLOR_CLASSES[event.color].bar)} />
         <span className="min-w-0 flex-1">
-          <span className={cn("block truncate text-sm font-medium", event.done && "text-muted-foreground line-through")}>
-            {event.title}
+          <span className="block truncate text-sm font-medium">
+            <span className="strike-line" data-done={event.done}>
+              {event.title}
+            </span>
           </span>
           <span className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
             {prefix}

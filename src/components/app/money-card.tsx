@@ -21,7 +21,7 @@ export function MoneyCard() {
         <p className="text-sm text-muted-foreground">Couldn’t load money data. {error}.</p>
       ) : data ? (
         <>
-          <dl className="grid grid-cols-3 gap-2">
+          <dl className="motion-fade grid grid-cols-3 gap-2">
             <Figure label="Income" value={data.income} />
             <Figure label="Spent" value={data.expense} />
             <Figure label="Left" value={data.net} className={data.net < 0 ? "text-destructive" : "text-positive"} />
@@ -29,9 +29,11 @@ export function MoneyCard() {
           {shown.length > 0 && (
             <>
               <div className="mt-4 flex h-1 overflow-hidden rounded-full bg-muted" role="img" aria-label="Spending by category">
+                <div className="motion-grow-x flex h-full w-full" style={{ "--d": "200ms" } as React.CSSProperties}>
                 {shown.map((c) => (
                   <span key={c.id} className="h-full" style={{ width: `${(c.amount / total) * 100}%`, background: c.color }} />
                 ))}
+                </div>
               </div>
               <ul className="mt-2.5 flex flex-wrap gap-x-3.5 gap-y-1 text-[12.5px] text-muted-foreground">
                 {shown.map((c) => {
