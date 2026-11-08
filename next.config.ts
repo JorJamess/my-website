@@ -1,9 +1,7 @@
 import type { NextConfig } from "next";
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
   turbopack: {
     rules: {
       "*.css": {
@@ -15,3 +13,6 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
+// ให้ `next dev` เข้าถึง binding ของ Cloudflare (D1, vars, secrets) ผ่าน getCloudflareContext()
+initOpenNextCloudflareForDev();

@@ -1,0 +1,6 @@
+ADMIN_PASSWORD=change-me
+SESSION_SECRET=long-random-string
+MCP_TOKEN=long-random-string
+INTEGRATION_KEY=long-random-string
+# ใช้ตอน dev เท่านั้น (production ใช้ service binding MONEY)
+MONEY_API_URL=https://money-tracker.example.workers.dev

@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "my-website",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    { "binding": "WORKER_SELF_REFERENCE", "service": "my-website" },
+    // แอปเงิน — เรียก Integration API แบบอ่านอย่างเดียว (ต้องตั้ง secret INTEGRATION_KEY)
+    { "binding": "MONEY", "service": "money-tracker" }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "my-website-db",
+      "database_id": "8f3e9fdb-e5cc-4d83-ba77-7ed7d59500ed",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "observability": { "enabled": true }
+}

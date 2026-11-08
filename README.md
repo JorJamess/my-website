@@ -1,36 +1,83 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# My Website
 
-## Getting Started
+เว็บไซต์หลักส่วนตัว — ตอนนี้มี **ปฏิทินลงงาน / ดูกำหนดการ / จดบันทึก** และเชื่อมกับ Claude ผ่าน **MCP**
 
-First, run the development server:
+- Next.js 16 (App Router) + shadcn/ui + lucide-react
+- Deploy บน Cloudflare Workers ผ่าน [OpenNext](https://opennext.js.org/cloudflare)
+- ฐานข้อมูล Cloudflare D1 (SQLite)
+- MCP server ในตัวที่ `/api/mcp` (Streamable HTTP, stateless)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## โครงสร้าง
+
+```
+src/app/                 หน้าเว็บ: / (ภาพรวม), /calendar, /notes, /connect
+src/app/api/             REST API (ต้อง login) + /api/mcp (ใช้ MCP_TOKEN)
+src/components/app/      UI ของแอป
+src/components/ui/       shadcn components
+src/lib/server/repo.ts   อ่าน/เขียน D1 (ใช้ร่วมกันทั้งเว็บและ MCP)
+src/lib/server/mcp/      นิยาม tools และ JSON-RPC handler ของ MCP
+src/lib/time.ts          โซนเวลา (TZ_OFFSET = +07:00) และตัวช่วยจัดการเวลา
+migrations/              SQL schema ของ D1
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## รันในเครื่อง
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+cp .dev.vars.example .dev.vars        # แก้รหัสผ่าน/โทเคนตามต้องการ
+npm run db:migrate:local
+npm run dev                            # http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+ทดสอบบน runtime ของ Cloudflare จริง (workerd): `npm run preview`
 
-## Learn More
+## Deploy ขึ้น Cloudflare (ครั้งแรก)
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npx wrangler login
+npx wrangler d1 create my-website-db
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+นำ `database_id` ที่ได้ไปแทนใน `wrangler.jsonc` แล้ว:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run db:migrate:remote
+npx wrangler secret put ADMIN_PASSWORD    # รหัสผ่านเข้าเว็บ
+npx wrangler secret put SESSION_SECRET    # สตริงสุ่มยาว ๆ เช่น จาก: openssl rand -hex 32
+npx wrangler secret put MCP_TOKEN         # สตริงสุ่มยาว ๆ (≥16 ตัว) เช่น: openssl rand -hex 24
+npm run deploy
+```
 
-## Deploy on Vercel
+ครั้งต่อไปแค่ `npm run deploy` (ถ้าเพิ่มไฟล์ใน `migrations/` ให้รัน `npm run db:migrate:remote` ก่อน)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+ใส่โดเมนของตัวเอง: Cloudflare Dashboard → Workers → my-website → Settings → Domains & Routes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## เชื่อมกับ Claude
+
+หลัง login เข้าเว็บ ไปที่หน้า **เชื่อม Claude** (`/connect`) จะมี URL และคำสั่งให้คัดลอกพร้อมใช้
+
+- **Claude.ai / Desktop / มือถือ**: Settings → Connectors → Add custom connector → วาง `https://<โดเมน>/api/mcp/<MCP_TOKEN>`
+- **Claude Code**:
+  ```bash
+  claude mcp add --scope user --transport http my-calendar https://<โดเมน>/api/mcp --header "Authorization: Bearer <MCP_TOKEN>"
+  ```
+
+Tools: `get_summary`, `list_events`, `search_events`, `create_event`, `update_event`, `delete_event`, `list_notes`, `get_note`, `create_note`, `update_note`, `delete_note`
+
+> ถ้า token หลุด: `npx wrangler secret put MCP_TOKEN` ใส่ค่าใหม่ แล้วอัปเดต URL ใน Claude
+
+## เชื่อมแอปเงิน (money-tracker)
+
+เว็บหลักอ่านข้อมูลเงินแบบอ่านอย่างเดียวจาก Integration API ของแอปเงิน (`/api/integration/v1/*`)
+
+- Production: เรียกผ่าน service binding `MONEY` (ดู `wrangler.jsonc`)
+- Dev: เรียกผ่าน `MONEY_API_URL` ใน `.dev.vars`
+- Secrets: `INTEGRATION_KEY` (ค่าเดียวกันทั้งสอง worker) และ `INTEGRATION_USER_EMAIL` (ฝั่ง money-tracker) — ตั้งใหม่ได้ด้วย `scripts/set-money-integration-secrets.sh`
+- โค้ด: `src/lib/server/money.ts`, `src/components/app/money-card.tsx`, `src/components/app/day-money.tsx`
+- สเปก API: `docs/money-integration-brief.md`
+
+## เพิ่มฟีเจอร์ใหม่
+
+- หน้าใหม่: สร้างโฟลเดอร์ใน `src/app/` แล้วเพิ่มลิงก์ใน `NAV` ที่ `src/components/app/app-shell.tsx`
+- ตารางใหม่: เพิ่มไฟล์ `migrations/0002_xxx.sql`
+- ให้ Claude ใช้ได้: เพิ่ม tool ใน `src/lib/server/mcp/tools.ts` (schema ใช้ zod)
