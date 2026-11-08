@@ -63,7 +63,7 @@ export function DashboardView() {
         <Pupu
           size={44}
           day={Number(today.slice(8))}
-          mood={allDone ? "cheer" : "happy"}
+          pose={allDone ? "cheer" : "happy"}
           className="motion-pop"
           title={allDone ? "Pupu is cheering: everything today is done" : "Pupu"}
         />
@@ -90,7 +90,7 @@ export function DashboardView() {
             </ol>
           ) : (
             <div className="group/pupu flex items-center gap-3 py-2">
-              <Pupu size={56} mood="sleepy" />
+              <Pupu size={56} pose="sleepy" />
               <p className="text-[15px] text-muted-foreground">
                 Nothing scheduled today.{" "}
                 <button className="font-medium text-brand underline-offset-4 hover:underline" onClick={() => openEvent(null)}>
@@ -252,7 +252,8 @@ function QuickNote({ today }: { today: string }) {
   }
 
   return (
-    <div className="rounded-[14px] border bg-card px-4 pt-3 pb-2.5">
+    <div className="group/pupu relative rounded-[14px] border bg-card px-4 pt-3 pb-2.5">
+      <Pupu pose="write" size={44} className="pointer-events-none absolute -top-7 right-3" />
       <Textarea
         aria-label="Quick note"
         placeholder="Write something down…"

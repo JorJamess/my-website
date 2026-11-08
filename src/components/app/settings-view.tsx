@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/client/api";
 import { useData } from "@/lib/client/use-data";
 import { Button } from "@/components/ui/button";
+import { Pupu, PUPU_POSE_LABELS, PUPU_POSES } from "./pupu";
 
 type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 
@@ -19,6 +20,7 @@ export function SettingsView() {
       <h1 className="text-[26px] font-medium tracking-tight">Settings</h1>
       <Backups />
       <InstallApp />
+      <MeetPupu />
     </div>
   );
 }
@@ -71,7 +73,10 @@ function Backups() {
         {loading && !data ? (
           <div className="h-12 animate-pulse rounded-lg bg-muted" />
         ) : error ? (
-          <p className="text-sm text-destructive">Couldn&rsquo;t load backups. {error}.</p>
+          <div className="flex items-center gap-3">
+            <Pupu pose="oops" size={52} />
+            <p className="text-sm text-destructive">Couldn&rsquo;t load backups. {error}.</p>
+          </div>
         ) : data?.length ? (
           <ul>
             {data.map((b) => (
@@ -147,6 +152,24 @@ function InstallApp() {
           </li>
         </ul>
       )}
+    </Section>
+  );
+}
+
+function MeetPupu() {
+  return (
+    <Section title="Meet Pupu" description="The mochi bunny who keeps your planner. Hover over Pupu to say hi.">
+      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {PUPU_POSES.map((pose) => (
+          <li
+            key={pose}
+            className="group/pupu flex flex-col items-center gap-1.5 rounded-[14px] border bg-card px-3 pt-4 pb-3 transition-transform duration-200 hover:-translate-y-0.5"
+          >
+            <Pupu pose={pose} size={88} day={pose === "happy" ? new Date().getDate() : undefined} />
+            <span className="text-[13px] text-muted-foreground">{PUPU_POSE_LABELS[pose]}</span>
+          </li>
+        ))}
+      </ul>
     </Section>
   );
 }

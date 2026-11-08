@@ -250,3 +250,19 @@
 .pupu:hover .pupu-ear-r,
 .group\/pupu:hover .pupu .pupu-ear-r { animation: pupu-wiggle-r 0.6s var(--ease-out-soft); }
 .pupu .pupu-z { animation: pupu-z 3.2s ease-in-out infinite; }
+@keyframes pupu-wave {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-18deg); }
+  50% { transform: rotate(10deg); }
+  75% { transform: rotate(-10deg); }
+}
+@keyframes pupu-twinkle {
+  0%, 100% { opacity: 0.4; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+.pupu .pupu-wave { transform-box: view-box; transform-origin: 300px 230px; }
+.pupu:hover .pupu-wave,
+.group\/pupu:hover .pupu .pupu-wave { animation: pupu-wave 0.9s var(--ease-out-soft); }
+.pupu .pupu-sparkle path { transform-box: fill-box; transform-origin: center; }
+.group\/pupu:hover .pupu .pupu-sparkle path,
+.pupu:hover .pupu-sparkle path { animation: pupu-twinkle 0.8s ease-in-out 2; }

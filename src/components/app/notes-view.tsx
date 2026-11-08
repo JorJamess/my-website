@@ -61,7 +61,7 @@ export function NotesView() {
             {loading && !notes && <div className="h-16 animate-pulse rounded-lg bg-muted" />}
             {notes?.length === 0 && (
               <div className="group/pupu flex flex-col items-center py-8 text-center text-sm text-muted-foreground">
-                <Pupu size={56} mood="sleepy" className="mb-2" />
+                <Pupu size={56} pose={debounced ? "search" : "sleepy"} className="mb-2" />
                 <p>{debounced ? "No notes match your search." : "No notes yet."}</p>
               </div>
             )}
@@ -95,7 +95,7 @@ export function NotesView() {
           />
         ) : (
           <Card className="group/pupu hidden items-center justify-center gap-3 py-20 text-center text-sm text-muted-foreground md:flex">
-            <Pupu size={88} />
+            <Pupu pose="write" size={96} />
             <p>Pick a note on the left, or start a new one.</p>
           </Card>
         )}

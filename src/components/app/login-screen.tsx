@@ -30,7 +30,9 @@ export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
   return (
     <div className="flex min-h-dvh items-center justify-center px-4">
       <form onSubmit={submit} className="w-full max-w-[340px]">
-        <Pupu size={76} className="motion-rise mb-4 -ml-2" title="Pupu" />
+        <div className="group/pupu w-fit">
+          <Pupu pose="wave" size={80} className="motion-rise mb-4 -ml-2" title="Pupu waving hello" />
+        </div>
         <h1 className="text-[28px] font-semibold tracking-tight">
           jameswebpupu<span className="text-brand">.</span>
         </h1>

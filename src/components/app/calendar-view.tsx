@@ -245,7 +245,7 @@ export function CalendarView() {
               </div>
             ) : (
               <div className="group/pupu flex flex-col items-center py-5 text-center text-sm text-muted-foreground">
-                <Pupu size={64} mood="sleepy" className="mb-2" />
+                <Pupu size={64} pose="sleepy" className="mb-2" />
                 <p>Nothing on this day.</p>
                 <Button variant="link" size="sm" onClick={() => openNew(selected)}>
                   Add an event

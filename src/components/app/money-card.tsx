@@ -5,6 +5,7 @@ import { api } from "@/lib/client/api";
 import { useData } from "@/lib/client/use-data";
 import { formatBaht, MONEY_APP_URL } from "@/lib/money-types";
 import { cn } from "@/lib/utils";
+import { Pupu } from "./pupu";
 
 /** การ์ดการเงินเดือนนี้ (ข้อมูลจากแอปเงิน) */
 export function MoneyCard() {
@@ -14,11 +15,15 @@ export function MoneyCard() {
   const shown = expenses.slice(0, 5);
 
   return (
-    <div className="rounded-[14px] border bg-card px-5 py-4">
+    <div className="group/pupu relative rounded-[14px] border bg-card px-5 py-4">
+      {!error && <Pupu pose="money" size={44} className="pointer-events-none absolute -top-7 right-3" />}
       {loading && !data && !error ? (
         <div className="h-24 animate-pulse rounded-lg bg-muted" />
       ) : error ? (
-        <p className="text-sm text-muted-foreground">Couldn’t load money data. {error}.</p>
+        <div className="flex items-center gap-3">
+          <Pupu pose="oops" size={52} />
+          <p className="text-sm text-muted-foreground">Couldn’t load money data. {error}.</p>
+        </div>
       ) : data ? (
         <>
           <dl className="motion-fade grid grid-cols-3 gap-2">
