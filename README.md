@@ -48,7 +48,15 @@ npx wrangler secret put MCP_TOKEN         # สตริงสุ่มยาว
 npm run deploy
 ```
 
-ครั้งต่อไปแค่ `npm run deploy` (ถ้าเพิ่มไฟล์ใน `migrations/` ให้รัน `npm run db:migrate:remote` ก่อน)
+ครั้งต่อไปแค่ `git push` — Cloudflare Workers Builds จะ build และ deploy ให้อัตโนมัติจาก branch `main`
+(หรือ deploy เองจากเครื่องด้วย `npm run deploy`)
+
+> ถ้าเพิ่มไฟล์ใน `migrations/` ให้รัน `npm run db:migrate:remote` **ก่อน** push
+
+ตั้งค่า Workers Builds (Dashboard → Workers → my-website → Settings → Builds):
+- Build command: `npx opennextjs-cloudflare build`
+- Deploy command: `npx opennextjs-cloudflare deploy`
+- Root directory: `/`
 
 ใส่โดเมนของตัวเอง: Cloudflare Dashboard → Workers → my-website → Settings → Domains & Routes
 
