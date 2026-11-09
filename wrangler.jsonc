@@ -27,7 +27,7 @@
   ],
   "triggers": {
     // ทุกวันอาทิตย์ 20:00 UTC = วันจันทร์ 03:00 เวลาไทย
-    "crons": ["0 20 * * 0"]
+    "crons": ["0 20 * * SUN"]
   },
   "observability": { "enabled": true }
 }
