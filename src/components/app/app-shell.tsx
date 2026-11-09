@@ -4,12 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { CalendarDays, LayoutGrid, ListChecks, Loader2, LogOut, Moon, NotebookPen, Plug, Settings, Sun } from "lucide-react";
+import { CalendarDays, LayoutGrid, ListChecks, Loader2, LogOut, Moon, NotebookPen, Plug, Search, Settings, Sun } from "lucide-react";
 import { api, UNAUTHORIZED_EVENT } from "@/lib/client/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { LoginScreen } from "./login-screen";
 import { Pupu } from "./pupu";
+import { SearchButton, SearchPalette } from "./search-palette";
 
 export const SITE_NAME = "jameswebpupu";
 
@@ -23,6 +24,7 @@ const NAV = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [authed, setAuthed] = useState<boolean | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -34,6 +36,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
     return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
   }, []);
+
+  useEffect(() => {
+    if (!authed) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen((o) => !o);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [authed]);
 
   if (authed === null)
     return (
@@ -53,6 +67,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Pupu size={30} />
           {SITE_NAME}
         </Link>
+        <SearchButton onClick={() => setSearchOpen(true)} className="mb-3" />
         <nav className="flex flex-col gap-0.5">
           {NAV.map(({ href, label, icon: Icon }) => (
             <Link
@@ -87,6 +102,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {SITE_NAME}
           </Link>
           <div className="flex items-center gap-0.5">
+            <Button variant="ghost" size="icon-sm" aria-label="Search" title="Search" onClick={() => setSearchOpen(true)}>
+              <Search />
+            </Button>
             <SettingsLink active={pathname.startsWith("/app/settings")} />
             <ThemeToggle />
             <LogoutButton onDone={() => setAuthed(false)} />
@@ -115,6 +133,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
       </div>
+      <SearchPalette open={searchOpen} onOpenChange={setSearchOpen} />
     </div>
   );
 }

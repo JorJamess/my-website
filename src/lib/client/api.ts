@@ -62,6 +62,9 @@ export const api = {
     request<{ todo: Todo }>(`/api/todos/${id}`, json("PATCH", input)).then((r) => r.todo),
   deleteTodo: (id: string) => request<{ ok: true }>(`/api/todos/${id}`, json("DELETE")),
 
+  search: (q: string) =>
+    request<{ events: CalendarEvent[]; notes: Note[]; todos: Todo[] }>(`/api/search?q=${encodeURIComponent(q)}`),
+
   notes: (q?: string) =>
     request<{ notes: Note[] }>(`/api/notes${q ? `?q=${encodeURIComponent(q)}` : ""}`).then((r) => r.notes),
   createNote: (input: NoteCreateInput) =>

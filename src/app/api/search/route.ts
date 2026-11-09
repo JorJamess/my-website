@@ -1,0 +1,14 @@
+import { NextResponse } from "next/server";
+import { api } from "@/lib/server/http";
+import { listNotes, listTodos, searchEvents } from "@/lib/server/repo";
+
+export const GET = api(async (req) => {
+  const q = (new URL(req.url).searchParams.get("q") ?? "").trim().slice(0, 100);
+  if (!q) return NextResponse.json({ events: [], notes: [], todos: [] });
+  const [events, notes, todos] = await Promise.all([
+    searchEvents(q, 8),
+    listNotes({ q, limit: 8 }),
+    listTodos({ q, includeDone: true, limit: 8 }),
+  ]);
+  return NextResponse.json({ events, notes, todos });
+});
