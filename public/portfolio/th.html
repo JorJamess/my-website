@@ -1,26 +1,26 @@
 <!doctype html>
-<html lang="th" data-type="service" data-radius="soft" data-buttons="tonal" data-motion>
+<html lang="th" data-type="service" data-radius="soft" data-buttons="pill" data-motion>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>โกมล บุญเรือง: นักศึกษาที่รับทำเว็บ มหาวิทยาลัยธรรมศาสตร์</title>
-<meta name="description" content="นักศึกษาวิศวกรรมคอมพิวเตอร์ ธรรมศาสตร์ พร้อมฝึกงานช่วงซัมเมอร์ 2027 และรับทำเว็บไซต์กับเว็บแอป">
+<title>โกมล บุญเรือง: นักศึกษาที่รับทำเว็บ</title>
+<meta name="description" content="นักศึกษาวิศวกรรมคอมพิวเตอร์ที่รับทำเว็บไซต์และเว็บแอป พร้อมฝึกงานช่วงซัมเมอร์ 2027">
 <meta name="robots" content="noindex, nofollow">
 <meta property="og:type" content="website">
-<meta property="og:title" content="โกมล บุญเรือง: นักศึกษาที่รับทำเว็บ มหาวิทยาลัยธรรมศาสตร์">
+<meta property="og:title" content="โกมล บุญเรือง: นักศึกษาที่รับทำเว็บ">
 <meta property="og:description" content="พร้อมฝึกงานช่วงซัมเมอร์ 2027 และรับทำเว็บไซต์กับเว็บแอป">
 <meta property="og:image" content="/portfolio/share.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/icon.png" type="image/png">
 <link rel="apple-touch-icon" href="/apple-icon.png">
-<meta name="theme-color" content="#eef0f3">
+<meta name="theme-color" content="#f3eee3">
 <!-- <link rel="canonical" href="https://[own domain, not bought yet]/"> -->
 <link rel="alternate" hreflang="en" href="/">
 <meta name="site-kind" content="other">
 <meta name="page-type" content="service">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400..700&family=Anuphan:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400..700&family=Instrument+Serif:ital@1&family=Anuphan:wght@400;500&family=Noto+Serif+Thai:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/system.css">
 <link rel="stylesheet" href="/assets/ui/cards.css">
 <link rel="stylesheet" href="/assets/motion/motion.css">
@@ -29,15 +29,16 @@
 <link rel="stylesheet" href="/assets/icons/icon.css">
 <style>
 :root {
-  --p-bg: #eef0f3; --p-surface: #e2e5ea; --p-ink: #0b0c0e; --p-muted: #5d6470;
-  --p-accent: #1f2de6; --p-accent-ink: #ffffff; --p-action: #1f2de6; --p-action-ink: #ffffff;
-  --p-inv-bg: #0b0c0e; --p-inv-surface: #17181a; --p-inv-ink: #eef0f3; --p-inv-muted: #8e8f92;
-  --p-inv-accent: #eef0f3; --p-inv-accent-ink: #0b0c0e; --p-inv-action: #eef0f3; --p-inv-action-ink: #0b0c0e;
+  --p-bg: #f3eee3; --p-surface: #e6e1d7; --p-ink: #111111; --p-muted: #64625e;
+  --p-accent: #d9541e; --p-accent-ink: #ffffff; --p-action: #d9541e; --p-action-ink: #ffffff;
+  --p-inv-bg: #111111; --p-inv-surface: #1d1d1d; --p-inv-ink: #f3eee3; --p-inv-muted: #94918b;
+  --p-inv-accent: #d9541e; --p-inv-accent-ink: #ffffff; --p-inv-action: #d9541e; --p-inv-action-ink: #ffffff;
   --font-display: "Hanken Grotesk", "Anuphan", system-ui, sans-serif;
   --font-text: "Hanken Grotesk", "Anuphan", system-ui, sans-serif;
-  --display-weight: 400;
-  --display-tracking: -0.03em;
-  --display-tracking-xl: -0.038em;
+  --font-accent: "Instrument Serif", "Noto Serif Thai", Georgia, serif;
+  --display-weight: 600;
+  --display-tracking: -0.035em;
+  --display-tracking-xl: -0.045em;
 }
 </style>
 <script>document.documentElement.classList.add('m-enter');setTimeout(()=>document.documentElement.classList.add('m-enter-done'),700)</script>
@@ -50,17 +51,47 @@
 <style>
   #projects .panel { --p-h: 340px; }
   #projects .frame__img { object-position: 50% 0%; }
+  /* the hero: one serif accent with an orange underline, the screen on an orange block, today's list floating */
+  .accent-word { font-family: var(--font-accent); font-style: italic; font-weight: 400; letter-spacing: -0.01em;
+    text-decoration: underline; text-decoration-color: var(--p-accent); text-decoration-thickness: 0.06em; text-underline-offset: 0.12em; }
+  :lang(th) .accent-word { font-style: normal; font-weight: 500; letter-spacing: 0; }
+  .hero__media.mesa { position: relative; overflow: visible; background: none; }
+  .mesa__block { position: absolute; inset: 0; background: var(--p-accent); border-radius: var(--r-lg); }
+  .mesa__shot { position: relative; width: calc(100% - 32px); height: calc(100% - 32px); object-fit: cover; object-position: 50% 0; border-radius: var(--r-lg); box-shadow: 0 0 0 1px color-mix(in oklab, var(--ink) 10%, transparent); }
+  .today-card { position: absolute; left: 16px; bottom: 56px; width: min(320px, 78%); padding: 16px 18px; background: #fffdf8; border-radius: var(--r-md);
+    box-shadow: 0 1px 0 color-mix(in oklab, var(--ink) 10%, transparent), 0 12px 32px -12px color-mix(in oklab, var(--ink) 30%, transparent); font-size: 14px; }
+  .today-card__head { display: flex; justify-content: space-between; margin-bottom: 10px; font-weight: 500; }
+  .today-card__head span:last-child { color: var(--muted); font-weight: 400; }
+  .today-card ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .today-card li { display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 8px; }
+  .today-card li time { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tick { width: 16px; height: 16px; border-radius: 50%; background: var(--ink); display: grid; place-items: center; }
+  .tick svg { width: 10px; height: 10px; }
+  .tick--next { background: none; box-shadow: inset 0 0 0 1.5px var(--p-accent); }
+  .today-card li.is-next time { color: var(--p-accent); }
+  .built { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+  .built span { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 14px; }
+  .built img { width: 20px; height: 20px; }
+  @media (max-width: 639px) { .today-card { left: 0; bottom: 32px; width: calc(100% - 32px); font-size: 13px; } .mesa__block { inset: 0; } .mesa__shot { width: calc(100% - 20px); height: calc(100% - 20px); } .built { display: none; } }
+  .hero__media.mesa .mesa__shot { position: absolute; inset: 0 auto auto 0; width: calc(100% - 32px); height: calc(100% - 32px); object-fit: cover; object-position: 50% 0; }
+  .hero__media.mesa .mesa__block { z-index: 0; }
+  .hero__media.mesa .mesa__shot, .hero__media.mesa .today-card { z-index: 1; }
+  @media (max-width: 639px) { .hero__media.mesa .mesa__shot { width: calc(100% - 20px); height: calc(100% - 20px); } }
   .tools { display: flex; flex-wrap: wrap; gap: 12px; }
   .tool { display: inline-flex; align-items: center; gap: 10px; font-size: var(--t-body); }
   #message textarea { min-height: 120px; }
   .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+  #about .tile { --tile-ratio: 1 / 1; }
+  @media (min-width: 640px) and (max-width: 1023px) { #about .tile { --tile-ratio: 16 / 9; } }
+  /* on the narrowest phones the nav keeps the logo and menu; the hero and the close carry the main action */
+  @media (max-width: 399px) { header.nav:not(.is-open) .nav__actions { display: none; } header.nav:not(.is-open) .nav__actions + .nav__toggle { margin-left: auto; } }
   @media (max-width: 639px) { #projects .panel { --p-h: 340px; } .tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>
 </head>
 <body>
 <!-- type: service
-     deal: hero split, nav nav-mega, close close-type, footer footer-columns, rhythm dark-band, buttons tonal, mark wordmark, grounds none
-     palette cool-grey-cobalt (the cool off-white of an editor's light theme and the blue of a link), type hanken
+     deal: hero split, nav nav-mega, close close-type, footer footer-columns, rhythm dark-band, buttons pill (owner's reference), mark wordmark, grounds none
+     palette from the owner: cream #F3EEE3, ink #111111, burnt orange #D9541E (start.mjs brand), type hanken + Instrument Serif accent
      moments: word-highlight in #why -->
 <header class="nav">
   <div class="wrap nav__bar">
@@ -107,16 +138,22 @@
   <section class="hero hero--split" data-enter aria-labelledby="hero-h">
     <div class="wrap"><div class="hero-text grid hero__grid">
       <div class="hero__text span-5">
-        <p class="hero__kicker"><span class="dot" aria-hidden="true"></span>พร้อมฝึกงานช่วงซัมเมอร์ 2027</p>
-        <h1 id="hero-h">นักศึกษาธรรมศาสตร์ ที่รับทำเว็บ</h1>
-        <p class="hero__lead">ผมชื่อโกมล บุญเรือง เรียนวิศวกรรมคอมพิวเตอร์ปี 2 ผมทำเว็บไซต์และเว็บแอป แล้วนำขึ้นใช้งานจริงบน Cloudflare</p>
+        <h1 id="hero-h">ผมทำเว็บไซต์ที่<em class="accent-word">คนใช้ได้จริง</em></h1>
+        <p class="hero__lead">ผมชื่อโกมล บุญเรือง เรียนวิศวกรรมคอมพิวเตอร์ปี 2 ผมทำเว็บไซต์และเว็บแอป</p>
         <div class="btn-row"><a class="btn btn--primary" href="#message">ส่งข้อความ<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a><a class="btn btn--secondary" href="#projects">ดูโปรเจกต์</a></div>
+        <p class="built">สร้างด้วย <span><img src="/assets/icons/nextjs.svg" alt="" width="20" height="20">Next.js</span><span><img src="/assets/icons/typescript.svg" alt="" width="20" height="20">TypeScript</span><span><img src="/assets/icons/cloudflare-workers.svg" alt="" width="20" height="20">Cloudflare</span><span><img src="/assets/icons/claude.svg" alt="" width="20" height="20">Claude</span><span><img src="/assets/icons/github.svg" alt="" width="20" height="20" class="ic-ink">GitHub</span></p>
       </div>
-      <div class="hero__media span-6 start-7">
-        <img src="/portfolio/img/jameswebpupu-today.webp" alt="หน้า Today ของ jameswebpupu แสดงงานของวันนี้และสิ่งที่ต้องทำในสัปดาห์" style="--ly-pos: 0% 0%" fetchpriority="high" width="1256" height="1432" data-source="client" data-subject="jameswebpupu, the owner's planner app">
-        <div class="ly-float">
-          <div class="ly-float__row"><span class="ly-live">ออนไลน์</span><span>Cloudflare Workers</span></div>
-          <div class="ly-float__title">jameswebpupu แอปวางแผนของผมเอง</div>
+      <div class="hero__media mesa span-6 start-7">
+        <span class="mesa__block" aria-hidden="true"></span>
+        <img class="mesa__shot" src="/portfolio/img/jameswebpupu-today.webp" alt="หน้า Today ของ jameswebpupu มีวิชาเรียน ประชุม และเวลาเข้ายิมของวันนี้" fetchpriority="high" width="1256" height="1432" data-source="client" data-subject="jameswebpupu, the owner's planner app">
+        <div class="today-card" role="img" aria-label="รายการวันนี้จาก jameswebpupu">
+          <div class="today-card__head"><span>วันนี้ใน jameswebpupu</span><span>จ. 9 พ.ย.</span></div>
+          <ul>
+              <li><span class="tick"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 5.2 4.1 7.2 8 3" fill="none" stroke="#f3eee3" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>ทบทวนก่อนสอบมิดเทอม</span><time>07:00</time></li>
+              <li><span class="tick"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 5.2 4.1 7.2 8 3" fill="none" stroke="#f3eee3" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>สอบ Data Structures</span><time>09:00</time></li>
+              <li><span class="tick"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 5.2 4.1 7.2 8 3" fill="none" stroke="#f3eee3" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>ประชุมงานกลุ่ม</span><time>14:00</time></li>
+              <li class="is-next"><span class="tick tick--next"></span><span>เข้ายิม</span><time>ถัดไป</time></li>
+          </ul>
         </div>
       </div>
     </div></div>
@@ -155,7 +192,7 @@
   <section class="section g2m" id="about" aria-labelledby="about-h">
     <div class="wrap grid grid--top">
         <div class="span-5 stack-6">
-          <h2 id="about-h">วิศวกรรมคอมพิวเตอร์ ธรรมศาสตร์</h2>
+          <h2 id="about-h">นักศึกษาวิศวกรรมคอมพิวเตอร์</h2>
           <p>ผมชื่อเจมส์ เรียนอยู่ปี 2 คาดว่าจบปี 2572 เขียน Python, Java และ JavaScript ได้ระดับเริ่มต้น และใช้ Git ทุกวัน</p>
           <div class="tools" aria-label="ภาษาและเครื่องมือที่ผมเขียนเองได้">
             <span class="tool"><span class="ic-tile"><img class="ic" src="/assets/icons/python.svg" alt="" width="24" height="24"></span>Python</span>
@@ -172,10 +209,10 @@
           </div>
           <p><a class="link" href="/portfolio/resume-th.pdf">ดาวน์โหลดเรซูเม่ (PDF)</a></p>
         </div>
-        <article class="tile span-6 start-7" style="--tile-ratio: 1 / 1">
+        <article class="tile span-6 start-7">
           <div class="tile__media"><img src="/portfolio/img/pupu-portrait.webp" alt="Pupu กระต่ายสีครีมถือสมุดสีน้ำเงิน มาสคอตที่ผมใช้แทนรูปตัวเอง" width="1256" height="1256" loading="lazy" data-source="client" data-subject="Pupu, the owner's mascot"></div>
           <div class="tile__head"><h3>โกมล บุญเรือง</h3></div>
-          <p class="tile__facts">วิศวกรรมคอมพิวเตอร์ มหาวิทยาลัยธรรมศาสตร์</p>
+          <p class="tile__facts">นักศึกษาวิศวกรรมคอมพิวเตอร์</p>
         </article>
     </div>
   </section>
@@ -251,7 +288,7 @@
       <div class="grid">
         <div class="span-4 stack-4">
           <a class="nav__logo" href="#top">โกมล บุญเรือง</a>
-          <p class="footer__lede">นักศึกษาธรรมศาสตร์ที่รับทำเว็บ</p>
+          <p class="footer__lede">นักศึกษาที่รับทำเว็บ</p>
         </div>
         <div class="span-2 footer__col"><h3>โปรเจกต์</h3><ul><li><a href="#projects">jameswebpupu</a></li><li><a href="#projects">Expenses</a></li></ul></div>
         <div class="span-2 footer__col"><h3>เกี่ยวกับ</h3><ul><li><a href="#about">ทักษะ</a></li><li><a href="/portfolio/resume-th.pdf">เรซูเม่</a></li></ul></div>
@@ -265,10 +302,6 @@
     </div>
   </div>
 </footer>
-
-<nav class="actionbar" aria-label="ทางลัด">
-  <a class="btn btn--primary" href="#message">ส่งข้อความ</a>
-</nav>
 
 <script type="module" src="/assets/system.js"></script>
 <script type="module" src="/assets/motion/motion.js"></script>

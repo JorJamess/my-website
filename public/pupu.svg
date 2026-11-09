@@ -20,7 +20,7 @@
       <path d="M186 254 Q193 264 200 254 Q207 264 214 254" fill="none" stroke="#3B2A22" stroke-width="6" stroke-linecap="round"/>
       <!-- planner held in front -->
       <g stroke="#3B2A22" stroke-width="8" stroke-linejoin="round">
-        <rect x="150" y="282" width="100" height="72" rx="10" fill="#1F2DE6"/>
+        <rect x="150" y="282" width="100" height="72" rx="10" fill="#D9541E"/>
         <path d="M150 300 H250" stroke="#fff" stroke-width="6" opacity=".9"/>
         <path d="M172 276 V290 M228 276 V290" stroke-linecap="round"/>
       </g>
