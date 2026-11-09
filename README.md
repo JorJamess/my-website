@@ -1,91 +1,89 @@
-# My Website
+# jameswebpupu
 
-เว็บไซต์หลักส่วนตัว — ตอนนี้มี **ปฏิทินลงงาน / ดูกำหนดการ / จดบันทึก** และเชื่อมกับ Claude ผ่าน **MCP**
+A personal site with two parts: a public bilingual portfolio at `/` and `/th`, and a private planner at `/app` (calendar, notes, a money summary and a contact inbox). It runs on Cloudflare Workers.
 
-- Next.js 16 (App Router) + shadcn/ui + lucide-react
-- Deploy บน Cloudflare Workers ผ่าน [OpenNext](https://opennext.js.org/cloudflare)
-- ฐานข้อมูล Cloudflare D1 (SQLite)
-- MCP server ในตัวที่ `/api/mcp` (Streamable HTTP, stateless)
+<p>
+  <img src="public/portfolio/img/jameswebpupu-today.webp" alt="The Today page of the planner" width="46%">
+  <img src="public/portfolio/img/jameswebpupu-calendar.webp" alt="The month calendar" width="50%">
+</p>
 
-## โครงสร้าง
+## What it does
+
+- **Portfolio** (English and Thai): static pages served straight from the Worker's assets, with a contact form and one-page resume PDFs.
+- **Planner** at `/app`, behind a password login:
+  - Today: the day as a timeline, what comes next, a quick note, recent notes.
+  - Calendar: a month view with all-day and multi-day events, a done checkbox and a side panel per day.
+  - Notes: search, pin, Markdown text.
+  - Messages from the portfolio's contact form, shown on Today.
+  - Money: this month's income and spending, read from a separate expenses app over a read-only API.
+  - Settings: weekly backups (download any of them), a cookie-free visit counter for the portfolio, and install-as-app.
+- **MCP server** at `/api/mcp`: an MCP client such as Claude can read the schedule, add or change events, write notes, read contact messages and see visit stats.
+- Light and dark themes, installable as a PWA, English UI.
+
+## Stack
+
+- Next.js 16 (App Router), TypeScript, Tailwind CSS 4, shadcn/ui, lucide-react
+- Cloudflare Workers via [OpenNext](https://opennext.js.org/cloudflare), D1 (SQLite), KV for backups
+- Zod for validation, a small hand-written JSON-RPC handler for MCP (Streamable HTTP, stateless)
+
+## Layout
 
 ```
-src/app/                 หน้าเว็บ: / (ภาพรวม), /calendar, /notes, /connect
-src/app/api/             REST API (ต้อง login) + /api/mcp (ใช้ MCP_TOKEN)
-src/components/app/      UI ของแอป
-src/components/ui/       shadcn components
-src/lib/server/repo.ts   อ่าน/เขียน D1 (ใช้ร่วมกันทั้งเว็บและ MCP)
-src/lib/server/mcp/      นิยาม tools และ JSON-RPC handler ของ MCP
-src/lib/time.ts          โซนเวลา (TZ_OFFSET = +07:00) และตัวช่วยจัดการเวลา
-migrations/              SQL schema ของ D1
+public/portfolio/        the portfolio pages (index.html, th.html), images and resumes
+public/assets/           CSS and JS the portfolio uses
+src/app/app/             the private planner pages (/app, /app/calendar, /app/notes, ...)
+src/app/api/             REST API (login required) and /api/mcp
+src/components/app/      planner UI
+src/lib/server/          D1 access, auth, login lockout, messages, money client, MCP tools
+src/lib/                 shared helpers (time zone, backups, visit counter)
+migrations/              D1 schema
+custom-worker.ts         Worker entry: serves the portfolio, counts visits, runs the weekly backup
 ```
 
-## รันในเครื่อง
+## Run it locally
 
 ```bash
 npm install
-cp .dev.vars.example .dev.vars        # แก้รหัสผ่าน/โทเคนตามต้องการ
+cp .dev.vars.example .dev.vars      # set ADMIN_PASSWORD, SESSION_SECRET and MCP_TOKEN
 npm run db:migrate:local
-npm run dev                            # http://localhost:3000
+npm run dev                          # http://localhost:3000
 ```
 
-ทดสอบบน runtime ของ Cloudflare จริง (workerd): `npm run preview`
+To try it on the real Workers runtime: `npm run preview`.
 
-## Deploy ขึ้น Cloudflare (ครั้งแรก)
+## Deploy
 
 ```bash
 npx wrangler login
-npx wrangler d1 create my-website-db
-```
-
-นำ `database_id` ที่ได้ไปแทนใน `wrangler.jsonc` แล้ว:
-
-```bash
+npx wrangler d1 create my-website-db           # put the database_id in wrangler.jsonc
+npx wrangler kv namespace create my-website-backups   # put the id in wrangler.jsonc
 npm run db:migrate:remote
-npx wrangler secret put ADMIN_PASSWORD    # รหัสผ่านเข้าเว็บ
-npx wrangler secret put SESSION_SECRET    # สตริงสุ่มยาว ๆ เช่น จาก: openssl rand -hex 32
-npx wrangler secret put MCP_TOKEN         # สตริงสุ่มยาว ๆ (≥16 ตัว) เช่น: openssl rand -hex 24
+npx wrangler secret put ADMIN_PASSWORD
+npx wrangler secret put SESSION_SECRET
+npx wrangler secret put MCP_TOKEN
 npm run deploy
 ```
 
-ครั้งต่อไปแค่ `git push` — Cloudflare Workers Builds จะ build และ deploy ให้อัตโนมัติจาก branch `main`
-(หรือ deploy เองจากเครื่องด้วย `npm run deploy`)
+After that, every push to `main` can build and deploy through Cloudflare Workers Builds
+(build: `npx opennextjs-cloudflare build`, deploy: `npx opennextjs-cloudflare deploy`).
+Run `npm run db:migrate:remote` before pushing a change that adds a migration.
 
-> ถ้าเพิ่มไฟล์ใน `migrations/` ให้รัน `npm run db:migrate:remote` **ก่อน** push
+## Connecting an MCP client
 
-ตั้งค่า Workers Builds (Dashboard → Workers → my-website → Settings → Builds):
-- Build command: `npx opennextjs-cloudflare build`
-- Deploy command: `npx opennextjs-cloudflare deploy`
-- Root directory: `/`
+Log in and open **Claude** in the menu: it shows the connector URL (it contains the secret token) and a ready-made command for Claude Code. The tools are `get_summary`, `list_events`, `search_events`, `create_event`, `update_event`, `delete_event`, `list_notes`, `get_note`, `create_note`, `update_note`, `delete_note`, `list_messages`, `mark_message_read` and `get_portfolio_stats`.
 
-ใส่โดเมนของตัวเอง: Cloudflare Dashboard → Workers → my-website → Settings → Domains & Routes
+## Security notes
 
-## เชื่อมกับ Claude
+- The planner uses one password. After 5 wrong tries in 15 minutes an IP is locked out for 15 minutes.
+- Sessions are signed cookies (HMAC); the MCP endpoint needs its own secret token.
+- Secrets live in Cloudflare secrets and `.dev.vars` (never committed).
+- The contact form has a hidden honeypot field and a per-IP limit, and stores only what the visitor typed.
+- The visit counter stores a day, a path, the referring domain and a country code. No cookies, no IP addresses.
 
-หลัง login เข้าเว็บ ไปที่หน้า **เชื่อม Claude** (`/connect`) จะมี URL และคำสั่งให้คัดลอกพร้อมใช้
+## Time zone
 
-- **Claude.ai / Desktop / มือถือ**: Settings → Connectors → Add custom connector → วาง `https://<โดเมน>/api/mcp/<MCP_TOKEN>`
-- **Claude Code**:
-  ```bash
-  claude mcp add --scope user --transport http my-calendar https://<โดเมน>/api/mcp --header "Authorization: Bearer <MCP_TOKEN>"
-  ```
+All dates are handled in Asia/Bangkok (UTC+07:00). Change `TZ_OFFSET` in `src/lib/time.ts` to use another fixed offset.
 
-Tools: `get_summary`, `list_events`, `search_events`, `create_event`, `update_event`, `delete_event`, `list_notes`, `get_note`, `create_note`, `update_note`, `delete_note`
+## Related
 
-> ถ้า token หลุด: `npx wrangler secret put MCP_TOKEN` ใส่ค่าใหม่ แล้วอัปเดต URL ใน Claude
-
-## เชื่อมแอปเงิน (money-tracker)
-
-เว็บหลักอ่านข้อมูลเงินแบบอ่านอย่างเดียวจาก Integration API ของแอปเงิน (`/api/integration/v1/*`)
-
-- Production: เรียกผ่าน service binding `MONEY` (ดู `wrangler.jsonc`)
-- Dev: เรียกผ่าน `MONEY_API_URL` ใน `.dev.vars`
-- Secrets: `INTEGRATION_KEY` (ค่าเดียวกันทั้งสอง worker) และ `INTEGRATION_USER_EMAIL` (ฝั่ง money-tracker) — ตั้งใหม่ได้ด้วย `scripts/set-money-integration-secrets.sh`
-- โค้ด: `src/lib/server/money.ts`, `src/components/app/money-card.tsx`, `src/components/app/day-money.tsx`
-- สเปก API: `docs/money-integration-brief.md`
-
-## เพิ่มฟีเจอร์ใหม่
-
-- หน้าใหม่: สร้างโฟลเดอร์ใน `src/app/` แล้วเพิ่มลิงก์ใน `NAV` ที่ `src/components/app/app-shell.tsx`
-- ตารางใหม่: เพิ่มไฟล์ `migrations/0002_xxx.sql`
-- ให้ Claude ใช้ได้: เพิ่ม tool ใน `src/lib/server/mcp/tools.ts` (schema ใช้ zod)
+The money numbers come from a separate expenses app through `/api/integration/v1/*`, called over a Cloudflare service binding. Its repository is private.

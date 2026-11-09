@@ -18,6 +18,7 @@ export function SettingsView() {
   return (
     <div className="max-w-2xl space-y-12">
       <h1 className="text-[26px] font-medium tracking-tight">Settings</h1>
+      <Visits />
       <Backups />
       <InstallApp />
       <MeetPupu />
@@ -170,6 +171,54 @@ function MeetPupu() {
           </li>
         ))}
       </ul>
+    </Section>
+  );
+}
+
+function Visits() {
+  const { data, error } = useData(() => api.stats(14), []);
+  const max = Math.max(1, ...(data?.byDay.map((d) => d.views) ?? [1]));
+  return (
+    <Section
+      title="Portfolio visits"
+      description="Page views of the public portfolio over the last 14 days. No cookies, no IP addresses; bots and your own logged-in visits aren’t counted."
+    >
+      {error ? (
+        <p className="text-sm text-destructive">Couldn&rsquo;t load visits. {error}.</p>
+      ) : !data ? (
+        <div className="h-16 animate-pulse rounded-lg bg-muted" />
+      ) : data.total === 0 ? (
+        <p className="text-[14.5px] text-muted-foreground">No visits yet. They show up here once someone opens the portfolio.</p>
+      ) : (
+        <div className="space-y-5">
+          <p className="text-[32px] leading-none font-semibold tracking-tight tabular-nums">
+            {data.total} <span className="text-[15px] font-normal text-muted-foreground">views, {data.byLang.en} English and {data.byLang.th} Thai</span>
+          </p>
+          <div className="flex h-16 items-end gap-1" role="img" aria-label="Views per day">
+            {data.byDay.map((d) => (
+              <div key={d.day} className="flex-1 rounded-sm bg-brand" style={{ height: `${Math.max(6, (d.views / max) * 100)}%` }} title={`${d.day}: ${d.views}`} />
+            ))}
+          </div>
+          <div className="grid gap-6 text-[14.5px] sm:grid-cols-2">
+            <div>
+              <p className="mb-1.5 text-[13px] font-medium text-muted-foreground">Where they came from</p>
+              {data.topRefs.length ? (
+                <ul>{data.topRefs.map((r) => (<li key={r.ref} className="flex justify-between border-t py-1.5"><span>{r.ref}</span><span className="tabular-nums text-muted-foreground">{r.views}</span></li>))}</ul>
+              ) : (
+                <p className="text-muted-foreground">Mostly direct links so far.</p>
+              )}
+            </div>
+            <div>
+              <p className="mb-1.5 text-[13px] font-medium text-muted-foreground">Countries</p>
+              {data.topCountries.length ? (
+                <ul>{data.topCountries.map((c) => (<li key={c.country} className="flex justify-between border-t py-1.5"><span>{c.country}</span><span className="tabular-nums text-muted-foreground">{c.views}</span></li>))}</ul>
+              ) : (
+                <p className="text-muted-foreground">No country data yet.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </Section>
   );
 }

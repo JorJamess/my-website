@@ -3,6 +3,7 @@
 // @ts-ignore -- ไฟล์นี้ถูกสร้างตอน `opennextjs-cloudflare build`
 import { default as handler } from "./.open-next/worker.js";
 import { saveSnapshot } from "./src/lib/backup-core";
+import { isCountableView, recordView } from "./src/lib/analytics-core";
 
 // หน้า Portfolio สาธารณะเป็นไฟล์ HTML ล้วนใน public/portfolio — เสิร์ฟจาก static assets โดยตรง
 // (rewrite ใน next.config ใช้ได้แค่ตอน `next dev`; OpenNext ไม่ rewrite ไปไฟล์ static)
@@ -13,10 +14,13 @@ export default {
     const url = new URL(request.url);
     const file = PORTFOLIO[url.pathname];
     if (file && (request.method === "GET" || request.method === "HEAD")) {
-      const res = await env.ASSETS!.fetch(new Request(new URL(file, url), request));
+      let res = await env.ASSETS!.fetch(new Request(new URL(file, url), request));
       // assets อาจตอบ redirect ไปที่ URL แบบไม่มี .html — ตามไปเอง เพื่อให้ผู้ใช้เห็น URL เดิม
       if (res.status >= 300 && res.status < 400 && res.headers.get("location")) {
-        return env.ASSETS!.fetch(new Request(new URL(res.headers.get("location")!, url), request));
+        res = await env.ASSETS!.fetch(new Request(new URL(res.headers.get("location")!, url), request));
+      }
+      if (res.status === 200 && isCountableView(request)) {
+        ctx.waitUntil(recordView(env.DB, request, url.pathname).catch((err) => console.error("[views]", err)));
       }
       return res;
     }

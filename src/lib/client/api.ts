@@ -82,6 +82,16 @@ export const api = {
   markMessage: (id: string, read: boolean) => request<{ ok: true }>(`/api/messages/${id}`, json("PATCH", { read })),
   deleteMessage: (id: string) => request<{ ok: true }>(`/api/messages/${id}`, json("DELETE")),
 
+  stats: (days = 14) =>
+    request<{
+      days: number;
+      total: number;
+      byDay: { day: string; views: number }[];
+      byLang: { en: number; th: number };
+      topRefs: { ref: string; views: number }[];
+      topCountries: { country: string; views: number }[];
+    }>(`/api/stats?days=${days}`),
+
   connect: () =>
     request<{ configured: boolean; origin: string; urlWithKey: string | null; urlBearer: string; token: string | null }>(
       "/api/connect",

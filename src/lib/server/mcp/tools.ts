@@ -8,6 +8,8 @@ import {
 } from "@/lib/schemas";
 import * as repo from "@/lib/server/repo";
 import { listMessages, setMessageRead } from "@/lib/server/messages";
+import { getVisitStats } from "@/lib/analytics-core";
+import { getEnv } from "@/lib/server/env";
 import { addDaysKey, formatLocal, localDateKey } from "@/lib/time";
 import type { CalendarEvent, Note } from "@/lib/types";
 
@@ -233,6 +235,14 @@ tools.push(
         messages: r.messages.map((m) => ({ ...m, created_at: formatLocal(m.created_at, tz) })),
       };
     },
+  }),
+  define({
+    name: "get_portfolio_stats",
+    title: "สถิติคนเปิดหน้า Portfolio",
+    description: "จำนวนคนเปิดหน้า Portfolio (นับต่อหน้า ไม่ใช้ cookie ไม่นับบอทและเจ้าของเว็บ) แยกรายวัน ภาษา เว็บที่ลิงก์มา และประเทศ",
+    schema: z.object({ days: z.number().int().min(1).max(90).optional().describe("ย้อนหลังกี่วัน (ค่าเริ่มต้น 14)") }),
+    annotations: { readOnlyHint: true },
+    run: async ({ days }) => getVisitStats((await getEnv()).DB, days ?? 14),
   }),
   define({
     name: "mark_message_read",
