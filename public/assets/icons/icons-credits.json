@@ -72,6 +72,18 @@
     "markUrl": "https://developer.mozilla.org/en-US/docs/Web/JavaScript"
   },
   {
+    "file": "linkedin.svg",
+    "icon": "logos:linkedin-icon",
+    "name": "LinkedIn",
+    "kind": "colour",
+    "source": "gilbarbara/logos@d6960edc1b7309d392c76e40d3a320df7f9ff85c",
+    "author": "Gil Barbara",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/gilbarbara/logos",
+    "trademark": true,
+    "markUrl": "https://www.linkedin.com/"
+  },
+  {
     "file": "nextjs.svg",
     "icon": "logos:nextjs-icon",
     "name": "Next.js",
