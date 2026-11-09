@@ -11,6 +11,22 @@ export type CalendarEvent = {
   all_day: boolean;
   color: EventColor;
   done: boolean;
+  repeat_days: number[] | null; // weekdays, 0 = Sunday; null = doesn't repeat
+  repeat_until: string | null; // YYYY-MM-DD
+  /** set on generated occurrences: when the series' first occurrence starts */
+  series_start_at?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Todo = {
+  id: string;
+  title: string;
+  note: string | null;
+  due_date: string | null; // YYYY-MM-DD
+  important: boolean;
+  done: boolean;
+  done_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -31,6 +47,7 @@ export type Summary = {
   todayEvents: CalendarEvent[];
   upcoming: CalendarEvent[];
   overdue: CalendarEvent[];
+  todos: Todo[];
   recentNotes: Note[];
-  counts: { thisWeek: number; thisMonth: number; doneThisWeek: number; notes: number };
+  counts: { thisWeek: number; thisMonth: number; doneThisWeek: number; notes: number; todosOpen: number };
 };

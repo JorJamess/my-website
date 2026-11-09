@@ -5,13 +5,16 @@ import {
   eventUpdateSchema,
   noteCreateSchema,
   noteUpdateSchema,
+  todoCreateSchema,
+  todoUpdateSchema,
 } from "@/lib/schemas";
 import * as repo from "@/lib/server/repo";
 import { listMessages, setMessageRead } from "@/lib/server/messages";
 import { getVisitStats } from "@/lib/analytics-core";
 import { getEnv } from "@/lib/server/env";
 import { addDaysKey, formatLocal, localDateKey } from "@/lib/time";
-import type { CalendarEvent, Note } from "@/lib/types";
+import { repeatLabel } from "@/lib/recurrence";
+import type { CalendarEvent, Note, Todo } from "@/lib/types";
 
 type ToolDef = {
   name: string;
@@ -37,11 +40,23 @@ function fmtEvent(e: CalendarEvent, tz: string) {
       : null,
     done: e.done,
     color: e.color,
+    ...(e.repeat_days ? { repeats: repeatLabel(e.repeat_days, e.repeat_until), repeat_days: e.repeat_days, repeat_until: e.repeat_until } : {}),
   };
   return {
     ...base,
     ...(e.location ? { location: e.location } : {}),
     ...(e.description ? { description: e.description } : {}),
+  };
+}
+
+function fmtTodo(t: Todo) {
+  return {
+    id: t.id,
+    title: t.title,
+    done: t.done,
+    important: t.important,
+    due_date: t.due_date,
+    ...(t.note ? { note: t.note } : {}),
   };
 }
 
@@ -73,7 +88,7 @@ export const tools: ToolDef[] = [
     name: "get_summary",
     title: "สรุปกำหนดการ",
     description:
-      "สรุปภาพรวม: งานวันนี้, งานที่กำลังจะมาถึงใน N วัน, งานที่เลยกำหนดแต่ยังไม่เสร็จ, บันทึกล่าสุด และสถิติสัปดาห์/เดือน",
+      "สรุปภาพรวม: งานวันนี้ (รวมงานที่ทำซ้ำ), งานที่กำลังจะมาถึงใน N วัน, งานที่เลยกำหนดแต่ยังไม่เสร็จ, To-do ที่ยังไม่เสร็จ, บันทึกล่าสุด และสถิติสัปดาห์/เดือน",
     schema: z.object({
       days: z.number().int().min(1).max(60).optional().describe("จำนวนวันข้างหน้าที่จะดู (ค่าเริ่มต้น 7)"),
     }),
@@ -86,6 +101,7 @@ export const tools: ToolDef[] = [
         today_events: s.todayEvents.map((e) => fmtEvent(e, tz)),
         upcoming: s.upcoming.map((e) => fmtEvent(e, tz)),
         overdue_not_done: s.overdue.map((e) => fmtEvent(e, tz)),
+        open_todos: s.todos.map(fmtTodo),
         recent_notes: s.recentNotes.map((n) => fmtNote(n, false)),
         counts: s.counts,
       };
@@ -129,7 +145,7 @@ export const tools: ToolDef[] = [
     name: "create_event",
     title: "ลงงานใหม่",
     description:
-      "เพิ่มงาน/นัดหมายลงปฏิทิน. เวลาที่ไม่มี offset ถือเป็นเวลาท้องถิ่น (ไทย +07:00). งานทั้งวันให้ใส่ all_day=true และ start เป็น YYYY-MM-DD",
+      "เพิ่มงาน/นัดหมายลงปฏิทิน. เวลาที่ไม่มี offset ถือเป็นเวลาท้องถิ่น (ไทย +07:00). งานทั้งวันให้ใส่ all_day=true และ start เป็น YYYY-MM-DD. งานที่ซ้ำทุกสัปดาห์ (เช่น ยิมทุกจันทร์/พุธ/ศุกร์) ให้ใส่ repeat_days=[1,3,5] โดย start คือครั้งแรก. สิ่งที่ไม่มีเวลาแน่นอนให้ใช้ create_todo แทน",
     schema: eventCreateSchema,
     run: async (args, tz) => ({ created: fmtEvent(await repo.createEvent(args), tz) }),
   }),
@@ -137,7 +153,7 @@ export const tools: ToolDef[] = [
     name: "update_event",
     title: "แก้ไขงาน",
     description:
-      "แก้ไขงานตาม id (ส่งเฉพาะฟิลด์ที่ต้องการเปลี่ยน). ถ้าเปลี่ยน start โดยไม่ส่ง end ระยะเวลาเดิมจะถูกคงไว้. ใช้ done=true เพื่อทำเครื่องหมายว่าเสร็จ",
+      "แก้ไขงานตาม id (ส่งเฉพาะฟิลด์ที่ต้องการเปลี่ยน; งานที่ทำซ้ำจะแก้ทั้งชุด). ถ้าเปลี่ยน start โดยไม่ส่ง end ระยะเวลาเดิมจะถูกคงไว้. ใช้ done=true เพื่อทำเครื่องหมายว่าเสร็จ",
     schema: eventUpdateSchema.extend({ id }),
     annotations: { idempotentHint: true },
     run: async ({ id, ...rest }, tz) => {
@@ -218,6 +234,51 @@ export const tools: ToolDef[] = [
 ];
 
 tools.push(
+  define({
+    name: "list_todos",
+    title: "ดู To-do",
+    description:
+      "รายการสิ่งที่ต้องทำที่ไม่ผูกเวลา (เรียง: ติดดาว, ใกล้กำหนดส่ง). ค่าเริ่มต้นแสดงเฉพาะที่ยังไม่เสร็จ. ใช้ตอบคำถามประมาณ 'วันนี้ควรทำอะไรก่อน' ควบคู่กับ get_summary",
+    schema: z.object({
+      include_done: z.boolean().optional().describe("รวมที่เสร็จแล้ว"),
+      query: z.string().optional(),
+    }),
+    annotations: { readOnlyHint: true },
+    run: async ({ include_done, query }) => {
+      const todos = await repo.listTodos({ includeDone: include_done, q: query });
+      return { count: todos.length, todos: todos.map(fmtTodo) };
+    },
+  }),
+  define({
+    name: "create_todo",
+    title: "เพิ่ม To-do",
+    description: "เพิ่มสิ่งที่ต้องทำที่ไม่มีเวลาแน่นอน (กำหนดส่งเป็นวันที่ได้ ไม่บังคับ). ถ้ามีวันเวลาชัดเจนให้ใช้ create_event",
+    schema: todoCreateSchema,
+    run: async (args) => ({ created: fmtTodo(await repo.createTodo(args)) }),
+  }),
+  define({
+    name: "update_todo",
+    title: "แก้ไข To-do",
+    description: "แก้ไข To-do ตาม id ใช้ done=true เมื่อทำเสร็จ, important=true เพื่อติดดาว",
+    schema: todoUpdateSchema.extend({ id }),
+    annotations: { idempotentHint: true },
+    run: async ({ id, ...rest }) => {
+      const t = await repo.updateTodo(id, rest);
+      if (!t) throw new repo.InputError(`ไม่พบ To-do id=${id}`);
+      return { updated: fmtTodo(t) };
+    },
+  }),
+  define({
+    name: "delete_todo",
+    title: "ลบ To-do",
+    description: "ลบ To-do ตาม id อย่างถาวร",
+    schema: z.object({ id }),
+    annotations: { destructiveHint: true, idempotentHint: true },
+    run: async ({ id }) => {
+      if (!(await repo.deleteTodo(id))) throw new repo.InputError(`ไม่พบ To-do id=${id}`);
+      return { deleted: id };
+    },
+  }),
   define({
     name: "list_messages",
     title: "อ่านข้อความติดต่อ",

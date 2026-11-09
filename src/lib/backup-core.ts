@@ -1,5 +1,5 @@
 // ใช้ได้ทั้งใน Next (API routes) และใน custom-worker.ts (cron) — ห้าม import อะไรที่ผูกกับ Next
-export const BACKUP_TABLES = ["events", "notes"] as const;
+export const BACKUP_TABLES = ["events", "notes", "todos"] as const;
 export const BACKUP_PREFIX = "backup:";
 /** เก็บ snapshot ไว้ 8 สัปดาห์ แล้ว KV ลบให้เอง */
 export const BACKUP_TTL_SECONDS = 8 * 7 * 24 * 60 * 60;

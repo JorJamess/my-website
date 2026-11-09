@@ -1,8 +1,8 @@
 "use client";
 
-import type { CalendarEvent, Note, Summary } from "@/lib/types";
+import type { CalendarEvent, Note, Summary, Todo } from "@/lib/types";
 import type { MoneyCalendar, MoneySummary, MoneyTransaction } from "@/lib/money-types";
-import type { EventCreateInput, EventUpdateInput, NoteCreateInput, NoteUpdateInput } from "@/lib/schemas";
+import type { EventCreateInput, EventUpdateInput, NoteCreateInput, NoteUpdateInput, TodoCreateInput, TodoUpdateInput } from "@/lib/schemas";
 
 export const UNAUTHORIZED_EVENT = "mw:unauthorized";
 export const DATA_CHANGED_EVENT = "mw:data-changed";
@@ -53,6 +53,14 @@ export const api = {
   updateEvent: (id: string, input: EventUpdateInput) =>
     request<{ event: CalendarEvent }>(`/api/events/${id}`, json("PATCH", input)).then((r) => r.event),
   deleteEvent: (id: string) => request<{ ok: true }>(`/api/events/${id}`, json("DELETE")),
+
+  todos: (includeDone = false) =>
+    request<{ todos: Todo[] }>(`/api/todos${includeDone ? "?done=1" : ""}`).then((r) => r.todos),
+  createTodo: (input: TodoCreateInput) =>
+    request<{ todo: Todo }>("/api/todos", json("POST", input)).then((r) => r.todo),
+  updateTodo: (id: string, input: TodoUpdateInput) =>
+    request<{ todo: Todo }>(`/api/todos/${id}`, json("PATCH", input)).then((r) => r.todo),
+  deleteTodo: (id: string) => request<{ ok: true }>(`/api/todos/${id}`, json("DELETE")),
 
   notes: (q?: string) =>
     request<{ notes: Note[] }>(`/api/notes${q ? `?q=${encodeURIComponent(q)}` : ""}`).then((r) => r.notes),

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Loader2, MapPin, Pin, Plus } from "lucide-react";
+import { Loader2, MapPin, Pin, Plus, Repeat } from "lucide-react";
 import { toast } from "sonner";
 import { api, notifyChanged } from "@/lib/client/api";
 import { useData } from "@/lib/client/use-data";
@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { EventDialog } from "./event-dialog";
+import { AddTodo, TodoItem } from "./todo-list";
 import { MessagesCard } from "./messages-card";
 import { MoneyCard } from "./money-card";
 import { Pupu } from "./pupu";
@@ -83,10 +84,10 @@ export function DashboardView() {
           ) : data && (data.todayEvents.length || data.overdue.length) ? (
             <ol className="timeline relative pl-[22px] before:absolute before:top-1.5 before:bottom-1.5 before:left-1 before:w-px before:bg-border">
               {data.overdue.map((e, i) => (
-                <TimelineItem key={e.id} event={e} onOpen={openEvent} index={i} late />
+                <TimelineItem key={`${e.id}:${e.start_at}`} event={e} onOpen={openEvent} index={i} late />
               ))}
               {data.todayEvents.map((e, i) => (
-                <TimelineItem key={e.id} event={e} onOpen={openEvent} index={data.overdue.length + i} />
+                <TimelineItem key={`${e.id}:${e.start_at}`} event={e} onOpen={openEvent} index={data.overdue.length + i} />
               ))}
             </ol>
           ) : (
@@ -109,7 +110,7 @@ export function DashboardView() {
                 const dayLabel = s === addDaysKey(today, 1) ? "Tomorrow" : `${formatDay(s, { weekday: "short" })} ${Number(s.slice(8))}`;
                 const right = e.all_day ? (s === en ? "All day" : `${daysBetween(s, en) + 1} days`) : timeOf(e.start_at);
                 return (
-                  <li key={e.id} className="border-t">
+                  <li key={`${e.id}:${e.start_at}`} className="border-t">
                     <button
                       onClick={() => openEvent(e)}
                       className="grid w-full grid-cols-[84px_1fr_auto] items-baseline gap-3 py-3 text-left text-[15px] transition-colors hover:bg-muted/40"
@@ -134,6 +135,24 @@ export function DashboardView() {
 
         <div className="min-w-0 space-y-8">
           <MessagesCard />
+          <div>
+            <SectionLabel>
+              To do{data?.counts.todosOpen ? <span className="ml-1.5 tabular-nums">· {data.counts.todosOpen}</span> : null}
+              <Link href="/app/todos" className="ml-auto font-normal hover:text-brand">
+                See all
+              </Link>
+            </SectionLabel>
+            <AddTodo />
+            {data?.todos.length ? (
+              <ul className="mt-2">
+                {data.todos.slice(0, 6).map((t) => (
+                  <TodoItem key={t.id} todo={t} compact />
+                ))}
+              </ul>
+            ) : (
+              !loading && <Empty>Nothing waiting. Add a task above.</Empty>
+            )}
+          </div>
           <div>
             <SectionLabel>Money this month</SectionLabel>
             <MoneyCard />
@@ -223,12 +242,16 @@ function TimelineItem({
           </span>
         )}
       </button>
-      <Checkbox
-        className="mt-1"
-        checked={event.done}
-        onCheckedChange={(v) => toggleDone(v === true)}
-        aria-label={event.done ? `Mark ${event.title} as not done` : `Mark ${event.title} as done`}
-      />
+      {event.repeat_days ? (
+        <Repeat aria-label="Repeats" className="mt-1.5 size-3.5 text-muted-foreground/60" />
+      ) : (
+        <Checkbox
+          className="mt-1"
+          checked={event.done}
+          onCheckedChange={(v) => toggleDone(v === true)}
+          aria-label={event.done ? `Mark ${event.title} as not done` : `Mark ${event.title} as done`}
+        />
+      )}
     </li>
   );
 }

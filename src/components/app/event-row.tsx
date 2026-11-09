@@ -1,6 +1,6 @@
 "use client";
 
-import { MapPin } from "lucide-react";
+import { MapPin, Repeat } from "lucide-react";
 import { toast } from "sonner";
 import { api, notifyChanged } from "@/lib/client/api";
 import { COLOR_CLASSES } from "@/lib/colors";
@@ -29,12 +29,16 @@ export function EventRow({
 
   return (
     <div className="group flex items-start gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/60">
-      <Checkbox
-        className="mt-0.5"
-        checked={event.done}
-        onCheckedChange={(v) => toggleDone(v === true)}
-        aria-label={event.done ? "Mark as not done" : "Mark as done"}
-      />
+      {event.repeat_days ? (
+        <Repeat aria-label="Repeats" className="mt-1 size-3.5 shrink-0 text-muted-foreground/60" />
+      ) : (
+        <Checkbox
+          className="mt-0.5"
+          checked={event.done}
+          onCheckedChange={(v) => toggleDone(v === true)}
+          aria-label={event.done ? "Mark as not done" : "Mark as done"}
+        />
+      )}
       <button type="button" onClick={() => onOpen(event)} className="flex min-w-0 flex-1 items-start gap-2.5 text-left">
         <span className={cn("mt-1 h-3.5 w-1 shrink-0 rounded-full", COLOR_CLASSES[event.color].bar)} />
         <span className="min-w-0 flex-1">

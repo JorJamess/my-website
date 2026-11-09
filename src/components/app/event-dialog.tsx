@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { Check, Loader2, MapPin, Trash2 } from "lucide-react";
+import { WEEKDAY_SHORT } from "@/lib/recurrence";
 import { toast } from "sonner";
 import { api, notifyChanged } from "@/lib/client/api";
 import { COLOR_CLASSES, COLOR_LABELS } from "@/lib/colors";
-import { eventDayRange, localDateKey, splitLocal, TZ_OFFSET } from "@/lib/time";
+import { eventDayRange, localDateKey, splitLocal, TZ_OFFSET, weekdayIndex } from "@/lib/time";
 import { EVENT_COLORS, type CalendarEvent, type EventColor } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -33,9 +34,23 @@ type FormState = {
   description: string;
   color: EventColor;
   done: boolean;
+  repeatDays: number[];
+  repeatUntil: string;
 };
 
-function initialState(event: CalendarEvent | null, defaultDate?: string): FormState {
+/** An occurrence on screen edits its whole series, so show the series' first occurrence. */
+function seriesStart(event: CalendarEvent): CalendarEvent {
+  if (!event.series_start_at) return event;
+  const shift = new Date(event.series_start_at).getTime() - new Date(event.start_at).getTime();
+  return {
+    ...event,
+    start_at: event.series_start_at,
+    end_at: event.end_at ? new Date(new Date(event.end_at).getTime() + shift).toISOString() : null,
+  };
+}
+
+function initialState(occurrence: CalendarEvent | null, defaultDate?: string): FormState {
+  const event = occurrence && seriesStart(occurrence);
   if (event) {
     const s = splitLocal(event.start_at);
     const [, lastDay] = eventDayRange(event);
@@ -51,6 +66,8 @@ function initialState(event: CalendarEvent | null, defaultDate?: string): FormSt
       description: event.description ?? "",
       color: event.color,
       done: event.done,
+      repeatDays: event.repeat_days ?? [],
+      repeatUntil: event.repeat_until ?? "",
     };
   }
   const date = defaultDate ?? localDateKey();
@@ -65,6 +82,8 @@ function initialState(event: CalendarEvent | null, defaultDate?: string): FormSt
     description: "",
     color: "blue",
     done: false,
+    repeatDays: [],
+    repeatUntil: "",
   };
 }
 
@@ -128,8 +147,11 @@ function EventForm({
         description: form.description.trim() || null,
         color: form.color,
       };
+      const repeat = form.repeatDays.length
+        ? { repeat_days: form.repeatDays, repeat_until: form.repeatUntil || null }
+        : { repeat_days: null, repeat_until: null };
       if (event) {
-        await api.updateEvent(event.id, { ...payload, end, done: form.done });
+        await api.updateEvent(event.id, { ...payload, ...repeat, end, done: form.done });
         toast.success("Event updated");
       } else {
         await api.createEvent({
@@ -137,6 +159,9 @@ function EventForm({
           end: end ?? undefined,
           location: payload.location ?? undefined,
           description: payload.description ?? undefined,
+          ...(form.repeatDays.length
+            ? { repeat_days: form.repeatDays, repeat_until: form.repeatUntil || undefined }
+            : {}),
         });
         toast.success("Event added");
       }
@@ -168,8 +193,11 @@ function EventForm({
   return (
         <form onSubmit={save} className="space-y-4">
           <DialogHeader>
-            <DialogTitle>{event ? "Edit event" : "New event"}</DialogTitle>
-            <DialogDescription>All times are Thailand time (UTC{TZ_OFFSET}).</DialogDescription>
+            <DialogTitle>{event ? (event.repeat_days ? "Edit repeating event" : "Edit event") : "New event"}</DialogTitle>
+            <DialogDescription>
+              All times are Thailand time (UTC{TZ_OFFSET}).
+              {event?.repeat_days ? " Changes apply to every repeat." : ""}
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-2">
@@ -263,7 +291,53 @@ function EventForm({
             </div>
           </div>
 
-          {event && (
+          <div className="space-y-2">
+            <Label>Repeat weekly</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {[1, 2, 3, 4, 5, 6, 0].map((d) => {
+                const on = form.repeatDays.includes(d);
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() =>
+                      setForm((f) => {
+                        let days = on ? f.repeatDays.filter((x) => x !== d) : [...f.repeatDays, d];
+                        // first time: include the start day too
+                        if (!on && f.repeatDays.length === 0) days = [...new Set([...days, weekdayIndex(f.startDate)])];
+                        return { ...f, repeatDays: days.sort() };
+                      })
+                    }
+                    className={cn(
+                      "h-8 min-w-11 rounded-full border px-3 text-[13px] transition-colors",
+                      on ? "border-brand bg-brand text-white" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {WEEKDAY_SHORT[d]}
+                  </button>
+                );
+              })}
+            </div>
+            {form.repeatDays.length > 0 && (
+              <div className="flex items-center gap-2 pt-1 text-sm">
+                <Label htmlFor="ev-ru" className="font-normal text-muted-foreground">
+                  Until
+                </Label>
+                <Input
+                  id="ev-ru"
+                  type="date"
+                  min={form.startDate}
+                  value={form.repeatUntil}
+                  onChange={(e) => set("repeatUntil", e.target.value)}
+                  className="w-auto"
+                />
+                <span className="text-xs text-muted-foreground">leave empty to repeat forever</span>
+              </div>
+            )}
+          </div>
+
+          {event && form.repeatDays.length === 0 && (
             <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
               <Checkbox checked={form.done} onCheckedChange={(v) => set("done", v === true)} />
               Done

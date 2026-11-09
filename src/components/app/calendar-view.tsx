@@ -195,7 +195,7 @@ export function CalendarView() {
                     ))}
                     {shown.map((e) => (
                       <button
-                        key={e.id}
+                        key={`${e.id}:${e.start_at}`}
                         type="button"
                         onClick={(ev) => {
                           ev.stopPropagation();
@@ -217,7 +217,7 @@ export function CalendarView() {
                   {/* dots (mobile) */}
                   <div className="flex flex-wrap gap-0.5 sm:hidden">
                     {list.slice(0, 4).map((e) => (
-                      <span key={e.id} className={cn("size-1.5 rounded-full", COLOR_CLASSES[e.color].dot)} />
+                      <span key={`${e.id}:${e.start_at}`} className={cn("size-1.5 rounded-full", COLOR_CLASSES[e.color].dot)} />
                     ))}
                     {bills.length > 0 && <span className="size-1.5 rounded-full border border-muted-foreground" />}
                   </div>
@@ -240,7 +240,7 @@ export function CalendarView() {
             {selectedEvents.length ? (
               <div className="-mx-2">
                 {selectedEvents.map((e) => (
-                  <EventRow key={e.id} event={e} onOpen={openEvent} />
+                  <EventRow key={`${e.id}:${e.start_at}`} event={e} onOpen={openEvent} />
                 ))}
               </div>
             ) : (

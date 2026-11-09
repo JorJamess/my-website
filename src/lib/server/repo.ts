@@ -1,21 +1,26 @@
 import "server-only";
-import type { CalendarEvent, EventColor, Note, Summary } from "@/lib/types";
+import type { CalendarEvent, EventColor, Note, Summary, Todo } from "@/lib/types";
 import type {
   EventCreateInput,
   EventUpdateInput,
   NoteCreateInput,
   NoteUpdateInput,
+  TodoCreateInput,
+  TodoUpdateInput,
 } from "@/lib/schemas";
 import { addDaysKey, isValidDate, localDateKey, parseLocal, TZ_OFFSET } from "@/lib/time";
+import { expandSeries, parseRepeatDays, serializeRepeatDays } from "@/lib/recurrence";
 import { getEnv } from "./env";
 
 export class InputError extends Error {}
 
-type EventRow = Omit<CalendarEvent, "all_day" | "done" | "color"> & {
+type EventRow = Omit<CalendarEvent, "all_day" | "done" | "color" | "repeat_days"> & {
   all_day: number;
   done: number;
   color: string;
+  repeat_days: string | null;
 };
+type TodoRow = Omit<Todo, "important" | "done"> & { important: number; done: number };
 type NoteRow = Omit<Note, "pinned"> & { pinned: number };
 
 const toEvent = (r: EventRow): CalendarEvent => ({
@@ -23,7 +28,9 @@ const toEvent = (r: EventRow): CalendarEvent => ({
   all_day: !!r.all_day,
   done: !!r.done,
   color: r.color as EventColor,
+  repeat_days: parseRepeatDays(r.repeat_days),
 });
+const toTodo = (r: TodoRow): Todo => ({ ...r, important: !!r.important, done: !!r.done });
 const toNote = (r: NoteRow): Note => ({ ...r, pinned: !!r.pinned });
 
 async function ctx() {
@@ -61,6 +68,33 @@ function resolveTimes(
 
 /* ----------------------------- Events ----------------------------- */
 
+/** Events overlapping [fromISO, toISO), with recurring series expanded into occurrences. */
+async function fetchEvents(
+  db: D1Database,
+  tz: string,
+  fromISO: string,
+  toISO: string,
+  q?: string,
+): Promise<CalendarEvent[]> {
+  const fromDay = localDateKey(new Date(fromISO), tz);
+  let sql = `SELECT * FROM events WHERE (
+      (repeat_days IS NULL AND start_at < ?1 AND COALESCE(end_at, start_at) >= ?2)
+      OR (repeat_days IS NOT NULL AND start_at < ?1 AND (repeat_until IS NULL OR repeat_until >= ?3)))`;
+  const binds: unknown[] = [toISO, fromISO, fromDay];
+  if (q) {
+    sql += " AND (title LIKE ?4 OR description LIKE ?4 OR location LIKE ?4)";
+    binds.push(`%${q}%`);
+  }
+  sql += " ORDER BY start_at ASC LIMIT 1000";
+  const { results } = await db.prepare(sql).bind(...binds).all<EventRow>();
+  const fromMs = new Date(fromISO).getTime();
+  const toMs = new Date(toISO).getTime();
+  return results
+    .map(toEvent)
+    .flatMap((e) => expandSeries(e, fromMs, toMs))
+    .sort((a, b) => a.start_at.localeCompare(b.start_at));
+}
+
 export async function listEvents(opts: {
   from: string;
   to: string;
@@ -70,17 +104,8 @@ export async function listEvents(opts: {
   const { db, tz } = await ctx();
   const from = parseOrThrow(opts.from, tz, "from").toISOString();
   const to = parseOrThrow(opts.to, tz, "to").toISOString();
-  let sql =
-    "SELECT * FROM events WHERE start_at < ?1 AND COALESCE(end_at, start_at) >= ?2";
-  const binds: unknown[] = [to, from];
-  if (opts.q) {
-    sql += " AND (title LIKE ?3 OR description LIKE ?3 OR location LIKE ?3)";
-    binds.push(`%${opts.q}%`);
-  }
-  if (opts.includeDone === false) sql += " AND done = 0";
-  sql += " ORDER BY start_at ASC LIMIT 1000";
-  const { results } = await db.prepare(sql).bind(...binds).all<EventRow>();
-  return results.map(toEvent);
+  const events = await fetchEvents(db, tz, from, to, opts.q);
+  return opts.includeDone === false ? events.filter((e) => !e.done) : events;
 }
 
 export async function searchEvents(q: string, limit = 50): Promise<CalendarEvent[]> {
@@ -108,8 +133,8 @@ export async function createEvent(input: EventCreateInput): Promise<CalendarEven
   const id = crypto.randomUUID();
   await db
     .prepare(
-      `INSERT INTO events (id, title, description, location, start_at, end_at, all_day, color, done, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      `INSERT INTO events (id, title, description, location, start_at, end_at, all_day, color, done, repeat_days, repeat_until, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
     )
     .bind(
       id,
@@ -120,6 +145,8 @@ export async function createEvent(input: EventCreateInput): Promise<CalendarEven
       end_at,
       allDay ? 1 : 0,
       input.color ?? "blue",
+      serializeRepeatDays(input.repeat_days),
+      input.repeat_days?.length ? (input.repeat_until ?? null) : null,
       now,
       now,
     )
@@ -157,10 +184,16 @@ export async function updateEvent(id: string, input: EventUpdateInput): Promise<
     location: input.location === undefined ? current.location : input.location?.trim() || null,
     color: input.color ?? current.color,
     done: input.done ?? current.done,
+    repeat_days: input.repeat_days === undefined ? current.repeat_days : input.repeat_days,
+    repeat_until: input.repeat_until === undefined ? current.repeat_until : input.repeat_until,
   };
+  if (!next.repeat_days?.length) {
+    next.repeat_days = null;
+    next.repeat_until = null;
+  } else next.done = false; // a repeating series has no single done state
   await db
     .prepare(
-      `UPDATE events SET title=?, description=?, location=?, start_at=?, end_at=?, all_day=?, color=?, done=?, updated_at=? WHERE id=?`,
+      `UPDATE events SET title=?, description=?, location=?, start_at=?, end_at=?, all_day=?, color=?, done=?, repeat_days=?, repeat_until=?, updated_at=? WHERE id=?`,
     )
     .bind(
       next.title,
@@ -171,6 +204,8 @@ export async function updateEvent(id: string, input: EventUpdateInput): Promise<
       allDay ? 1 : 0,
       next.color,
       next.done ? 1 : 0,
+      serializeRepeatDays(next.repeat_days),
+      next.repeat_until,
       new Date().toISOString(),
       id,
     )
@@ -298,33 +333,114 @@ export async function getSummary(days = 7): Promise<Summary> {
   const monthStart = parseLocal(monthStartKey, tz).toISOString();
   const monthEnd = parseLocal(nextMonthKey, tz).toISOString();
 
-  const overlap = "start_at < ?1 AND COALESCE(end_at, start_at) >= ?2";
-  const [todayRes, upRes, overdueRes, notesRes, counts] = await db.batch([
-    db.prepare(`SELECT * FROM events WHERE ${overlap} ORDER BY all_day DESC, start_at ASC`).bind(tomorrowStart, todayStart),
-    db.prepare(`SELECT * FROM events WHERE start_at >= ?1 AND start_at < ?2 ORDER BY start_at ASC LIMIT 50`).bind(tomorrowStart, upcomingEnd),
-    db.prepare(`SELECT * FROM events WHERE done = 0 AND COALESCE(end_at, start_at) < ?1 AND start_at >= ?2 ORDER BY start_at DESC LIMIT 20`).bind(todayStart, parseLocal(addDaysKey(today, -30), tz).toISOString()),
-    db.prepare(`SELECT * FROM notes ORDER BY pinned DESC, updated_at DESC LIMIT 5`),
-    db.prepare(
-      `SELECT
-        (SELECT COUNT(*) FROM events WHERE start_at < ?1 AND COALESCE(end_at, start_at) >= ?2) AS thisWeek,
-        (SELECT COUNT(*) FROM events WHERE start_at < ?1 AND COALESCE(end_at, start_at) >= ?2 AND done = 1) AS doneThisWeek,
-        (SELECT COUNT(*) FROM events WHERE start_at < ?3 AND COALESCE(end_at, start_at) >= ?4) AS thisMonth,
-        (SELECT COUNT(*) FROM notes) AS notes`,
-    ).bind(weekEnd, weekStart, monthEnd, monthStart),
+  const [monthEvents, upRes, overdueRes, notesRes, todosRes, counts] = await Promise.all([
+    fetchEvents(db, tz, monthStart < weekStart ? monthStart : weekStart, monthEnd > weekEnd ? monthEnd : weekEnd),
+    fetchEvents(db, tz, tomorrowStart, upcomingEnd),
+    db
+      .prepare(
+        `SELECT * FROM events WHERE done = 0 AND repeat_days IS NULL AND COALESCE(end_at, start_at) < ?1 AND start_at >= ?2 ORDER BY start_at DESC LIMIT 20`,
+      )
+      .bind(todayStart, parseLocal(addDaysKey(today, -30), tz).toISOString())
+      .all<EventRow>(),
+    db.prepare(`SELECT * FROM notes ORDER BY pinned DESC, updated_at DESC LIMIT 5`).all<NoteRow>(),
+    db
+      .prepare(
+        `SELECT * FROM todos WHERE done = 0 ORDER BY important DESC, due_date IS NULL, due_date ASC, created_at DESC LIMIT 30`,
+      )
+      .all<TodoRow>(),
+    db
+      .prepare(`SELECT (SELECT COUNT(*) FROM notes) AS notes, (SELECT COUNT(*) FROM todos WHERE done = 0) AS todosOpen`)
+      .first<{ notes: number; todosOpen: number }>(),
   ]);
 
-  const c = (counts.results[0] ?? {}) as Record<string, number>;
+  const overlaps = (e: CalendarEvent, from: string, to: string) =>
+    e.start_at < to && (e.end_at ?? e.start_at) >= from;
+  const inWeek = monthEvents.filter((e) => overlaps(e, weekStart, weekEnd));
+  const inMonth = monthEvents.filter((e) => overlaps(e, monthStart, monthEnd));
+  const todayEvents = monthEvents
+    .filter((e) => overlaps(e, todayStart, tomorrowStart))
+    .sort((a, b) => Number(b.all_day) - Number(a.all_day) || a.start_at.localeCompare(b.start_at));
+
   return {
     today,
-    todayEvents: (todayRes.results as EventRow[]).map(toEvent),
-    upcoming: (upRes.results as EventRow[]).map(toEvent),
-    overdue: (overdueRes.results as EventRow[]).map(toEvent),
-    recentNotes: (notesRes.results as NoteRow[]).map(toNote),
+    todayEvents,
+    upcoming: upRes.filter((e) => e.start_at >= tomorrowStart).slice(0, 50),
+    overdue: overdueRes.results.map(toEvent),
+    recentNotes: notesRes.results.map(toNote),
+    todos: todosRes.results.map(toTodo),
     counts: {
-      thisWeek: c.thisWeek ?? 0,
-      thisMonth: c.thisMonth ?? 0,
-      doneThisWeek: c.doneThisWeek ?? 0,
-      notes: c.notes ?? 0,
+      thisWeek: inWeek.length,
+      thisMonth: inMonth.length,
+      doneThisWeek: inWeek.filter((e) => e.done).length,
+      notes: counts?.notes ?? 0,
+      todosOpen: counts?.todosOpen ?? 0,
     },
   };
+}
+
+/* ----------------------------- To-dos ----------------------------- */
+
+export async function listTodos(opts: { includeDone?: boolean; q?: string; limit?: number } = {}): Promise<Todo[]> {
+  const { db } = await ctx();
+  const where: string[] = [];
+  const binds: unknown[] = [];
+  if (!opts.includeDone) where.push("done = 0");
+  if (opts.q) {
+    where.push(`(title LIKE ?${binds.length + 1} OR note LIKE ?${binds.length + 1})`);
+    binds.push(`%${opts.q}%`);
+  }
+  const limit = Math.min(Math.max(opts.limit ?? 200, 1), 500);
+  const sql = `SELECT * FROM todos ${where.length ? "WHERE " + where.join(" AND ") : ""}
+    ORDER BY done ASC, important DESC, due_date IS NULL, due_date ASC, COALESCE(done_at, created_at) DESC LIMIT ${limit}`;
+  const { results } = await db.prepare(sql).bind(...binds).all<TodoRow>();
+  return results.map(toTodo);
+}
+
+export async function getTodo(id: string): Promise<Todo | null> {
+  const { db } = await ctx();
+  const row = await db.prepare("SELECT * FROM todos WHERE id = ?").bind(id).first<TodoRow>();
+  return row ? toTodo(row) : null;
+}
+
+export async function createTodo(input: TodoCreateInput): Promise<Todo> {
+  const { db } = await ctx();
+  const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  await db
+    .prepare(
+      `INSERT INTO todos (id, title, note, due_date, important, done, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
+    )
+    .bind(id, input.title.trim(), input.note?.trim() || null, input.due_date ?? null, input.important ? 1 : 0, now, now)
+    .run();
+  return (await getTodo(id))!;
+}
+
+export async function updateTodo(id: string, input: TodoUpdateInput): Promise<Todo | null> {
+  const { db } = await ctx();
+  const cur = await getTodo(id);
+  if (!cur) return null;
+  const done = input.done ?? cur.done;
+  const now = new Date().toISOString();
+  await db
+    .prepare(
+      `UPDATE todos SET title=?, note=?, due_date=?, important=?, done=?, done_at=?, updated_at=? WHERE id=?`,
+    )
+    .bind(
+      input.title?.trim() ?? cur.title,
+      input.note === undefined ? cur.note : input.note?.trim() || null,
+      input.due_date === undefined ? cur.due_date : input.due_date,
+      (input.important ?? cur.important) ? 1 : 0,
+      done ? 1 : 0,
+      done ? (cur.done ? cur.done_at : now) : null,
+      now,
+      id,
+    )
+    .run();
+  return getTodo(id);
+}
+
+export async function deleteTodo(id: string): Promise<boolean> {
+  const { db } = await ctx();
+  const r = await db.prepare("DELETE FROM todos WHERE id = ?").bind(id).run();
+  return (r.meta.changes ?? 0) > 0;
 }
