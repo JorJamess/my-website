@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { CalendarDays, Globe, LayoutGrid, ListChecks, Loader2, LogOut, Moon, NotebookPen, Plug, Search, Settings, Sun } from "lucide-react";
+import { ArrowLeft, CalendarDays, LayoutGrid, ListChecks, Loader2, LogOut, Moon, NotebookPen, Plug, Search, Settings, Sun } from "lucide-react";
 import { api, UNAUTHORIZED_EVENT } from "@/lib/client/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -63,10 +63,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-dvh">
       {/* Sidebar (desktop) */}
       <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 flex-col border-r px-4 py-7 md:flex">
-        <a href="/" title="Back to portfolio" className="group/pupu mb-6 flex items-center gap-2 px-1.5 text-[15px] font-semibold tracking-tight">
+        <Link href="/app" className="group/pupu mb-6 flex items-center gap-2 px-1.5 text-[15px] font-semibold tracking-tight">
           <Pupu size={30} />
           {SITE_NAME}
-        </a>
+        </Link>
         <SearchButton onClick={() => setSearchOpen(true)} className="mb-3" />
         <nav className="flex flex-col gap-0.5">
           {NAV.map(({ href, label, icon: Icon }) => (
@@ -84,14 +84,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </nav>
-        <a
-          href="/"
-          className="mt-3 flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[14.5px] text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <Globe className="size-[17px]" strokeWidth={1.7} />
-          Portfolio
-        </a>
         <div className="mt-auto flex items-center gap-0.5">
+          <BackToPortfolio />
           <SettingsLink active={pathname.startsWith("/app/settings")} />
           <ThemeToggle />
           <LogoutButton onDone={() => setAuthed(false)} />
@@ -104,19 +98,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Top bar (mobile) */}
         <header className="sticky top-0 z-30 flex h-12 items-center justify-between border-b bg-background/85 px-4 backdrop-blur md:hidden">
-          <a href="/" title="Back to portfolio" className="group/pupu flex items-center gap-1.5 text-[15px] font-semibold tracking-tight">
+          <Link href="/app" className="group/pupu flex items-center gap-1.5 text-[15px] font-semibold tracking-tight">
             <Pupu size={26} />
             {SITE_NAME}
-          </a>
+          </Link>
           <div className="flex items-center gap-0.5">
             <Button variant="ghost" size="icon-sm" aria-label="Search" title="Search" onClick={() => setSearchOpen(true)}>
               <Search />
             </Button>
-            <Button variant="ghost" size="icon-sm" asChild>
-              <a href="/" aria-label="Back to portfolio" title="Back to portfolio">
-                <Globe />
-              </a>
-            </Button>
+            <BackToPortfolio />
             <SettingsLink active={pathname.startsWith("/app/settings")} />
             <ThemeToggle />
             <LogoutButton onDone={() => setAuthed(false)} />
@@ -147,6 +137,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       <SearchPalette open={searchOpen} onOpenChange={setSearchOpen} />
     </div>
+  );
+}
+
+function BackToPortfolio() {
+  return (
+    <Button variant="ghost" size="icon-sm" asChild>
+      <a href="/" aria-label="Back to portfolio" title="Back to portfolio">
+        <ArrowLeft />
+      </a>
+    </Button>
   );
 }
 
