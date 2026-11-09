@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { CalendarDays, LayoutGrid, ListChecks, Loader2, LogOut, Moon, NotebookPen, Plug, Search, Settings, Sun } from "lucide-react";
+import { CalendarDays, Globe, LayoutGrid, ListChecks, Loader2, LogOut, Moon, NotebookPen, Plug, Search, Settings, Sun } from "lucide-react";
 import { api, UNAUTHORIZED_EVENT } from "@/lib/client/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -84,6 +84,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </nav>
+        <a
+          href="/"
+          className="mt-3 flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[14.5px] text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <Globe className="size-[17px]" strokeWidth={1.7} />
+          Portfolio
+        </a>
         <div className="mt-auto flex items-center gap-0.5">
           <SettingsLink active={pathname.startsWith("/app/settings")} />
           <ThemeToggle />
@@ -104,6 +111,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-0.5">
             <Button variant="ghost" size="icon-sm" aria-label="Search" title="Search" onClick={() => setSearchOpen(true)}>
               <Search />
+            </Button>
+            <Button variant="ghost" size="icon-sm" asChild>
+              <a href="/" aria-label="Back to portfolio" title="Back to portfolio">
+                <Globe />
+              </a>
             </Button>
             <SettingsLink active={pathname.startsWith("/app/settings")} />
             <ThemeToggle />

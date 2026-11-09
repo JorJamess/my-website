@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { api } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +60,9 @@ export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
           {pending && <Loader2 className="animate-spin" />}
           Log in
         </Button>
+        <a href="/" className="mt-5 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
+          <ArrowLeft className="size-3.5" /> Back to portfolio
+        </a>
       </form>
     </div>
   );
