@@ -63,10 +63,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-dvh">
       {/* Sidebar (desktop) */}
       <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 flex-col border-r px-4 py-7 md:flex">
-        <Link href="/app" className="group/pupu mb-6 flex items-center gap-2 px-1.5 text-[15px] font-semibold tracking-tight">
+        <a href="/" title="Back to portfolio" className="group/pupu mb-6 flex items-center gap-2 px-1.5 text-[15px] font-semibold tracking-tight">
           <Pupu size={30} />
           {SITE_NAME}
-        </Link>
+        </a>
         <SearchButton onClick={() => setSearchOpen(true)} className="mb-3" />
         <nav className="flex flex-col gap-0.5">
           {NAV.map(({ href, label, icon: Icon }) => (
@@ -104,10 +104,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Top bar (mobile) */}
         <header className="sticky top-0 z-30 flex h-12 items-center justify-between border-b bg-background/85 px-4 backdrop-blur md:hidden">
-          <Link href="/app" className="group/pupu flex items-center gap-1.5 text-[15px] font-semibold tracking-tight">
+          <a href="/" title="Back to portfolio" className="group/pupu flex items-center gap-1.5 text-[15px] font-semibold tracking-tight">
             <Pupu size={26} />
             {SITE_NAME}
-          </Link>
+          </a>
           <div className="flex items-center gap-0.5">
             <Button variant="ghost" size="icon-sm" aria-label="Search" title="Search" onClick={() => setSearchOpen(true)}>
               <Search />
