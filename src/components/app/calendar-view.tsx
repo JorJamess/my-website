@@ -114,7 +114,7 @@ export function CalendarView() {
           <Button variant="outline" size="icon" aria-label="Next month" onClick={() => goto(1)}>
             <ChevronRight />
           </Button>
-          <Button className="ml-1.5 rounded-full px-4" onClick={() => openNew(selected)}>
+          <Button className="ml-1.5 px-4" onClick={() => openNew(selected)}>
             <Plus /> New event
           </Button>
         </div>

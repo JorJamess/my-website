@@ -76,7 +76,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               aria-current={isActive(href) ? "page" : undefined}
               className={cn(
                 "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[14.5px] text-muted-foreground transition-colors hover:text-foreground",
-                isActive(href) && "bg-brand-soft font-medium text-brand hover:text-brand",
+                isActive(href) && "bg-brand-soft font-medium text-foreground hover:text-foreground",
               )}
             >
               <Icon className="size-[17px]" strokeWidth={1.7} />
@@ -126,7 +126,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               aria-current={isActive(href) ? "page" : undefined}
               className={cn(
                 "flex flex-col items-center gap-0.5 py-2 text-[11px] text-muted-foreground",
-                isActive(href) && "font-medium text-brand",
+                isActive(href) && "font-medium text-foreground",
               )}
             >
               <Icon className="size-5" strokeWidth={1.7} />
@@ -152,7 +152,7 @@ function BackToPortfolio() {
 
 function SettingsLink({ active }: { active: boolean }) {
   return (
-    <Button variant="ghost" size="icon-sm" asChild className={cn(active && "bg-brand-soft text-brand")}>
+    <Button variant="ghost" size="icon-sm" asChild className={cn(active && "bg-brand-soft text-foreground")}>
       <Link href="/app/settings" aria-label="Settings" title="Settings" aria-current={active ? "page" : undefined}>
         <Settings />
       </Link>

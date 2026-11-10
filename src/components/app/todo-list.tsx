@@ -20,7 +20,7 @@ function dueLabel(due: string, today: string) {
 }
 
 /** One line: type a task, press Enter. Optional due date. */
-export function AddTodo({ autoFocus }: { autoFocus?: boolean }) {
+export function AddTodo({ autoFocus, compact }: { autoFocus?: boolean; compact?: boolean }) {
   const [title, setTitle] = useState("");
   const [due, setDue] = useState("");
   const [saving, setSaving] = useState(false);
@@ -47,11 +47,12 @@ export function AddTodo({ autoFocus }: { autoFocus?: boolean }) {
       <Input
         aria-label="New task"
         autoFocus={autoFocus}
-        placeholder="Add a task, e.g. Java homework"
+        placeholder={compact ? "Add a task" : "Add a task, e.g. Java homework"}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         className="h-10 flex-1 text-[15px]"
       />
+      {!compact && (
       <Input
         aria-label="Due date (optional)"
         type="date"
@@ -59,10 +60,11 @@ export function AddTodo({ autoFocus }: { autoFocus?: boolean }) {
         onChange={(e) => setDue(e.target.value)}
         className="hidden h-10 w-[150px] sm:block"
       />
+      )}
       <button
         type="submit"
         disabled={!title.trim() || saving}
-        className="inline-flex h-10 items-center gap-1 rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground transition-opacity disabled:opacity-40"
+        className="inline-flex h-10 items-center gap-1 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-opacity disabled:opacity-40"
       >
         {saving && <Loader2 className="size-4 animate-spin" />}Add
       </button>

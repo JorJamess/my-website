@@ -49,14 +49,14 @@ export function DashboardView() {
   return (
     <div>
       <header className="flex flex-wrap items-end gap-x-6 gap-y-4 border-b pb-7">
-        <p className="motion-rise text-[72px] leading-[0.85] font-semibold tracking-[-0.05em] text-brand tabular-nums md:text-[96px]">
+        <p className="motion-rise text-[72px] leading-[0.85] font-semibold tracking-[-0.05em] text-foreground tabular-nums md:text-[96px]">
           {today.slice(8)}
         </p>
         <div className="motion-rise pb-1" style={{ "--d": "90ms" } as React.CSSProperties}>
           <h1 className="text-[22px] font-medium">{formatDay(today, { weekday: "long" })}</h1>
           <p className="text-[15px] text-muted-foreground">{formatDay(today, { month: "long", year: "numeric" })}</p>
         </div>
-        <Button className="ml-auto h-9 rounded-full px-4" onClick={() => openEvent(null)}>
+        <Button className="ml-auto h-9 px-4" onClick={() => openEvent(null)}>
           <Plus /> New event
         </Button>
       </header>
@@ -142,7 +142,7 @@ export function DashboardView() {
                 See all
               </Link>
             </SectionLabel>
-            <AddTodo />
+            <AddTodo compact />
             {data?.todos.length ? (
               <ul className="mt-2">
                 {data.todos.slice(0, 6).map((t) => (
@@ -295,7 +295,7 @@ function QuickNote({ today }: { today: string }) {
       />
       <div className="flex items-center justify-between pt-1">
         <span className="text-xs text-muted-foreground" title="⌘/Ctrl + Enter to save">First line is the title</span>
-        <Button size="sm" variant={content.trim() ? "default" : "ghost"} className="rounded-full" onClick={save} disabled={saving || !content.trim()}>
+        <Button size="sm" variant={content.trim() ? "default" : "ghost"} className="" onClick={save} disabled={saving || !content.trim()}>
           {saving && <Loader2 className="animate-spin" />}
           Save note
         </Button>

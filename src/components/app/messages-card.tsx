@@ -43,7 +43,7 @@ export function MessagesCard() {
       <h2 className="mb-3.5 flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
         Messages
         {data.unread > 0 && (
-          <span className="rounded-full bg-brand px-1.5 py-px text-[11px] text-primary-foreground tabular-nums">{data.unread} new</span>
+          <span className="rounded-full bg-brand px-1.5 py-px text-[11px] text-white tabular-nums">{data.unread} new</span>
         )}
       </h2>
       <ul>
@@ -64,7 +64,7 @@ export function MessagesCard() {
             </button>
             {open === m.id && (
               <div className="motion-fade flex items-center gap-2 pb-3 pl-6.5">
-                <Button size="sm" className="rounded-full px-3" asChild>
+                <Button size="sm" className="px-3" asChild>
                   <a href={`mailto:${m.email}?subject=${encodeURIComponent("Re: your message")}`}>Reply to {m.email}</a>
                 </Button>
                 <Button size="icon-sm" variant="ghost" aria-label="Delete message" onClick={() => remove(m.id)}>

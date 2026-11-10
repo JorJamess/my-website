@@ -14,7 +14,7 @@ export const PUPU_POSE_LABELS: Record<PupuPose, string> = {
   oops: "Oops",
 };
 
-const INK = "#3B2A22";
+const INK = "#2B211B";
 const FUR = "#FFF7E8";
 const PINK = "#FFC4CF";
 
@@ -51,7 +51,7 @@ export function Pupu({
       {title && <title>{title}</title>}
 
       {/* ears + body */}
-      <g stroke={INK} strokeWidth={9} strokeLinecap="round" strokeLinejoin="round">
+      <g stroke={INK} strokeWidth={7} strokeLinecap="round" strokeLinejoin="round">
         <g className="pupu-ear pupu-ear-l">
           <path d="M150 150 C120 90 118 38 146 30 C176 22 186 86 182 140" fill={FUR} />
           <path d="M150 120 C140 86 140 56 150 52 C162 48 168 84 168 118" fill={PINK} stroke="none" />
@@ -67,6 +67,9 @@ export function Pupu({
         <path d="M150 352 C150 370 182 370 182 352" fill={FUR} />
         <path d="M218 352 C218 370 250 370 250 352" fill={FUR} />
       </g>
+
+      {/* soft shade along the belly */}
+      <path d="M90 300 C110 338 160 352 200 352 C250 352 300 336 318 296 C304 340 256 356 200 356 C150 356 104 340 90 300Z" fill="#F2E1C4" />
 
       <Face pose={pose} />
 
@@ -139,8 +142,10 @@ function Face({ pose }: { pose: PupuPose }) {
         {/* looking down at the page while writing or searching */}
         <circle cx="160" cy={pose === "write" || pose === "search" ? 238 : 232} r="13" fill={INK} />
         <circle cx="164" cy={pose === "write" || pose === "search" ? 233 : 227} r="4.5" fill="#fff" />
+        <circle cx="155" cy={pose === "write" || pose === "search" ? 243 : 237} r="2.5" fill="#fff" />
         <circle cx="240" cy={pose === "write" || pose === "search" ? 238 : 232} r="13" fill={INK} />
         <circle cx="244" cy={pose === "write" || pose === "search" ? 233 : 227} r="4.5" fill="#fff" />
+        <circle cx="235" cy={pose === "write" || pose === "search" ? 243 : 237} r="2.5" fill="#fff" />
       </>
     );
 
@@ -156,8 +161,8 @@ function Face({ pose }: { pose: PupuPose }) {
   return (
     <>
       {eyes}
-      <ellipse cx="128" cy="262" rx="19" ry="11" fill="#FFB3C1" opacity={0.75} />
-      <ellipse cx="272" cy="262" rx="19" ry="11" fill="#FFB3C1" opacity={0.75} />
+      <ellipse cx="127" cy="263" rx="18" ry="10" fill="#FFB3C1" opacity={0.8} />
+      <ellipse cx="273" cy="263" rx="18" ry="10" fill="#FFB3C1" opacity={0.8} />
       {mouth}
     </>
   );
@@ -166,7 +171,7 @@ function Face({ pose }: { pose: PupuPose }) {
 function Planner({ day }: { day?: number | string }) {
   return (
     <>
-      <g stroke={INK} strokeWidth={8} strokeLinejoin="round">
+      <g stroke={INK} strokeWidth={7} strokeLinejoin="round">
         <rect x="150" y="282" width="100" height="72" rx="10" fill="var(--brand, #D9541E)" />
         <path d="M150 300 H250" stroke="#fff" strokeWidth={6} opacity={0.9} />
         <path d="M172 276 V290 M228 276 V290" strokeLinecap="round" />

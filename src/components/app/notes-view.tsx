@@ -45,7 +45,7 @@ export function NotesView() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-[26px] font-medium tracking-tight">Notes</h1>
-        <Button className="rounded-full px-4" onClick={() => setSelectedId("new")}>
+        <Button className="px-4" onClick={() => setSelectedId("new")}>
           <Plus /> New note
         </Button>
       </div>
@@ -191,7 +191,7 @@ function NoteEditor({
               {confirmDelete && "Click again to delete"}
             </Button>
           )}
-          <Button size="sm" className="rounded-full px-3" onClick={save} disabled={saving || !dirty}>
+          <Button size="sm" className="px-3" onClick={save} disabled={saving || !dirty}>
             {saving && <Loader2 className="animate-spin" />}
             Save note
           </Button>

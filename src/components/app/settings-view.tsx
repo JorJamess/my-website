@@ -70,11 +70,11 @@ function Backups() {
       description="Your events, notes and to-dos are backed up every Monday at 03:00 Thailand time. Each backup is kept for 8 weeks."
     >
       <div className="flex flex-wrap gap-2">
-        <Button className="rounded-full px-4" onClick={backupNow} disabled={saving}>
+        <Button className="px-4" onClick={backupNow} disabled={saving}>
           {saving && <Loader2 className="animate-spin" />}
           Back up now
         </Button>
-        <Button variant="outline" className="rounded-full px-4" asChild>
+        <Button variant="outline" className="px-4" asChild>
           <a href="/api/backups/download" download>
             <Download /> Download current data
           </a>
@@ -212,7 +212,7 @@ function Security() {
       title="Security"
       description="Lost a device or used a shared computer? Log out everywhere to end every session, including this one."
     >
-      <Button variant="outline" className="rounded-full px-4" onClick={logoutEverywhere} disabled={busy}>
+      <Button variant="outline" className="px-4" onClick={logoutEverywhere} disabled={busy}>
         {busy && <Loader2 className="animate-spin" />}
         {confirm ? "Click again to log out everywhere" : "Log out of all devices"}
       </Button>
@@ -247,7 +247,7 @@ function InstallApp() {
         <p className="text-[14.5px] text-positive">Installed on this device.</p>
       ) : prompt ? (
         <Button
-          className="rounded-full px-4"
+          className="px-4"
           onClick={async () => {
             await prompt.prompt();
             setPrompt(null);

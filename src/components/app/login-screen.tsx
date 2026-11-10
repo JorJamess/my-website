@@ -56,7 +56,7 @@ export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
             </p>
           )}
         </div>
-        <Button type="submit" className="mt-4 h-10 w-full rounded-full" disabled={pending || !password}>
+        <Button type="submit" className="mt-4 h-10 w-full " disabled={pending || !password}>
           {pending && <Loader2 className="animate-spin" />}
           Log in
         </Button>
