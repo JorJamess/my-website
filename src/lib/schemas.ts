@@ -36,19 +36,34 @@ export const eventUpdateSchema = z.object({
   repeat_until: dateKey.nullable().optional().describe("ทำซ้ำถึงวันที่ YYYY-MM-DD; null = ไม่มีวันสิ้นสุด"),
 });
 
+const priorityName = z.enum(["none", "low", "medium", "high"]);
+const todoStatus = z.enum(["todo", "doing", "done"]);
+
 export const todoCreateSchema = z.object({
   title: z.string().min(1).max(200).describe("สิ่งที่ต้องทำ เช่น ส่งการบ้าน Java"),
   note: z.string().max(5000).optional().describe("รายละเอียดเพิ่มเติม"),
   due_date: dateKey.optional().describe("กำหนดส่ง YYYY-MM-DD (ไม่บังคับ)"),
-  important: z.boolean().optional().describe("ติดดาวว่าสำคัญ"),
+  priority: priorityName.optional().describe("none | low | medium | high"),
+  status: todoStatus.optional().describe("todo | doing | done"),
+  category: z.string().min(1).max(60).nullable().optional().describe("ชื่อหมวดหมู่ เช่น Study (สร้างให้อัตโนมัติถ้ายังไม่มี)"),
+  parent_id: z.string().optional().describe("id ของงานแม่ ถ้านี่คืองานย่อย (ซ้อนได้ชั้นเดียว)"),
+  important: z.boolean().optional().describe("เหมือน priority=high (ใช้ priority แทน)"),
 });
 
 export const todoUpdateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   note: z.string().max(5000).nullable().optional(),
   due_date: dateKey.nullable().optional().describe("ส่ง null เพื่อลบกำหนดส่ง"),
+  priority: priorityName.optional(),
+  status: todoStatus.optional().describe("todo | doing | done"),
+  category: z.string().min(1).max(60).nullable().optional().describe("ชื่อหมวดหมู่; null เพื่อเอาออก"),
   important: z.boolean().optional(),
   done: z.boolean().optional().describe("ทำเสร็จแล้วหรือยัง"),
+});
+
+export const categorySchema = z.object({
+  name: z.string().min(1).max(60),
+  color: z.enum(EVENT_COLORS).optional(),
 });
 
 export const noteCreateSchema = z.object({
@@ -119,3 +134,4 @@ export type TodoUpdateInput = z.infer<typeof todoUpdateSchema>;
 export type HabitCreateInput = z.infer<typeof habitCreateSchema>;
 export type HabitUpdateInput = z.infer<typeof habitUpdateSchema>;
 export type CheckinInput = z.infer<typeof checkinSchema>;
+export type CategoryInput = z.infer<typeof categorySchema>;

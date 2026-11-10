@@ -1,6 +1,6 @@
 "use client";
 
-import type { CalendarEvent, HabitOverview, Note, Summary, Todo } from "@/lib/types";
+import type { CalendarEvent, Category, HabitOverview, Note, Summary, Todo } from "@/lib/types";
 import type { MoneyCalendar, MoneySummary, MoneyTransaction } from "@/lib/money-types";
 import type { EventCreateInput, EventUpdateInput, NoteCreateInput, NoteUpdateInput, TodoCreateInput, TodoUpdateInput, HabitCreateInput, HabitUpdateInput, CheckinInput } from "@/lib/schemas";
 
@@ -57,6 +57,9 @@ export const api = {
 
   todos: (includeDone = false) =>
     request<{ todos: Todo[] }>(`/api/todos${includeDone ? "?done=1" : ""}`).then((r) => r.todos),
+  todosWithCategories: (includeDone = true) =>
+    request<{ todos: Todo[]; categories: Category[] }>(`/api/todos${includeDone ? "?done=1" : ""}`),
+  deleteCategory: (id: string) => request<{ ok: true }>(`/api/categories/${id}`, json("DELETE")),
   createTodo: (input: TodoCreateInput) =>
     request<{ todo: Todo }>("/api/todos", json("POST", input)).then((r) => r.todo),
   updateTodo: (id: string, input: TodoUpdateInput) =>

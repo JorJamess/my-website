@@ -4,7 +4,7 @@
  * Tables that are backed up and restored, in dependency order (parents first).
  * To include a new table in backups and restores, add it here; nothing else needs to change.
  */
-export const BACKUP_TABLES = ["events", "notes", "todos", "habits", "habit_checkins"] as const;
+export const BACKUP_TABLES = ["events", "notes", "categories", "todos", "habits", "habit_checkins"] as const;
 export type BackupTable = (typeof BACKUP_TABLES)[number];
 
 export const BACKUP_PREFIX = "backup:";

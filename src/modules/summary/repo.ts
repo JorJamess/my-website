@@ -39,11 +39,12 @@ export async function getSummary(days = 7): Promise<Summary> {
     db.prepare(`SELECT * FROM notes ORDER BY pinned DESC, updated_at DESC LIMIT 5`).all<NoteRow>(),
     db
       .prepare(
-        `SELECT * FROM todos WHERE done = 0 ORDER BY important DESC, due_date IS NULL, due_date ASC, created_at DESC LIMIT 30`,
+        `SELECT t.*, c.name AS cat_name, c.color AS cat_color FROM todos t LEFT JOIN categories c ON c.id = t.category_id
+         WHERE t.done = 0 AND t.parent_id IS NULL ORDER BY t.priority DESC, t.due_date IS NULL, t.due_date ASC, t.created_at DESC LIMIT 30`,
       )
       .all<TodoRow>(),
     db
-      .prepare(`SELECT (SELECT COUNT(*) FROM notes) AS notes, (SELECT COUNT(*) FROM todos WHERE done = 0) AS todosOpen`)
+      .prepare(`SELECT (SELECT COUNT(*) FROM notes) AS notes, (SELECT COUNT(*) FROM todos WHERE done = 0 AND parent_id IS NULL) AS todosOpen`)
       .first<{ notes: number; todosOpen: number }>(),
     getHabitsToday(),
   ]);

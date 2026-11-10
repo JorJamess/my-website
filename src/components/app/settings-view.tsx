@@ -13,7 +13,7 @@ type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString("en-US", { timeZone: "Asia/Bangkok", dateStyle: "medium", timeStyle: "short" });
-const TABLE_LABELS: Record<string, string> = { events: "events", notes: "notes", todos: "to-dos", habits: "habits", habit_checkins: "check-ins" };
+const TABLE_LABELS: Record<string, string> = { events: "events", notes: "notes", todos: "to-dos", habits: "habits", habit_checkins: "check-ins", categories: "categories" };
 const REASONS: Record<string, string> = { weekly: "Weekly", manual: "Manual", "pre-restore": "Before a restore" };
 const countsText = (b: { counts?: Record<string, number>; events?: number; notes?: number }) => {
   const c = b.counts ?? { events: b.events ?? 0, notes: b.notes ?? 0 };

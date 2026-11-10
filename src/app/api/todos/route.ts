@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { api } from "@/lib/server/http";
-import { createTodo, listTodos } from "@/lib/server/repo";
+import { createTodo, listCategories, listTodos } from "@/lib/server/repo";
 import { todoCreateSchema } from "@/lib/schemas";
 
 export const GET = api(async (req) => {
-  const includeDone = new URL(req.url).searchParams.get("done") === "1";
-  return NextResponse.json({ todos: await listTodos({ includeDone }) });
+  const q = new URL(req.url).searchParams;
+  const [todos, categories] = await Promise.all([listTodos({ includeDone: q.get("done") === "1" }), listCategories()]);
+  return NextResponse.json({ todos, categories });
 });
 
 export const POST = api(async (req) => {

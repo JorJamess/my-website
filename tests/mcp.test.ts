@@ -51,3 +51,25 @@ describe("habit tools", () => {
     await expect(call("check_in_habit", { id, day: "2999-01-01" })).rejects.toThrow();
   });
 });
+
+describe("to-do tools", () => {
+  it("creates with priority and category, makes subtasks, filters and completes", async () => {
+    const parent = (await call("create_todo", { title: "Report", priority: "high", category: "Study", due_date: "2026-11-12" })).created;
+    expect(parent).toMatchObject({ priority: "high", category: "Study", status: "todo" });
+    const sub = (await call("create_todo", { title: "Intro", parent_id: parent.id })).created;
+    expect(sub.parent_id).toBe(parent.id);
+
+    const high = await call("list_todos", { min_priority: "high" });
+    expect(high.todos.map((t: { title: string }) => t.title)).toEqual(["Report"]);
+    expect(high.categories).toEqual(["Study"]);
+    expect((await call("list_todos", { parent_id: parent.id })).todos.length).toBe(1);
+
+    const doing = await call("update_todo", { id: parent.id, status: "doing" });
+    expect(doing.updated.status).toBe("doing");
+    expect((await call("list_todos", { status: "doing" })).count).toBe(1);
+
+    const done = await call("update_todo", { id: parent.id, done: true });
+    expect(done.updated).toMatchObject({ status: "done", done: true });
+    expect((await call("list_todos")).todos.map((t: { title: string }) => t.title)).toEqual(["Intro"]);
+  });
+});

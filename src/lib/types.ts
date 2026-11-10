@@ -19,11 +19,24 @@ export type CalendarEvent = {
   updated_at: string;
 };
 
+export type TodoStatus = "todo" | "doing" | "done";
+export const TODO_PRIORITIES = ["none", "low", "medium", "high"] as const;
+export type TodoPriorityName = (typeof TODO_PRIORITIES)[number];
+
+export type Category = { id: string; name: string; color: EventColor; kind: string };
+
 export type Todo = {
   id: string;
   title: string;
   note: string | null;
   due_date: string | null; // YYYY-MM-DD
+  /** 0 none, 1 low, 2 medium, 3 high */
+  priority: number;
+  status: TodoStatus;
+  category: { id: string; name: string; color: EventColor } | null;
+  /** set on subtasks: the id of the parent task (one level only) */
+  parent_id: string | null;
+  /** true when priority is high (kept for older callers) */
   important: boolean;
   done: boolean;
   done_at: string | null;

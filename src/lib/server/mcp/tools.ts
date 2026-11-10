@@ -18,7 +18,7 @@ import { getEnv } from "@/lib/server/env";
 import { addDaysKey, formatLocal, localDateKey } from "@/lib/time";
 import { repeatLabel } from "@/lib/recurrence";
 import { scheduleLabel } from "@/lib/habits";
-import type { CalendarEvent, HabitOverview, HabitToday, Note, Todo } from "@/lib/types";
+import { TODO_PRIORITIES, type CalendarEvent, type HabitOverview, type HabitToday, type Note, type Todo } from "@/lib/types";
 
 type ToolDef = {
   name: string;
@@ -57,9 +57,12 @@ function fmtTodo(t: Todo) {
   return {
     id: t.id,
     title: t.title,
+    status: t.status,
     done: t.done,
-    important: t.important,
+    priority: TODO_PRIORITIES[t.priority] ?? "none",
     due_date: t.due_date,
+    ...(t.category ? { category: t.category.name } : {}),
+    ...(t.parent_id ? { parent_id: t.parent_id } : {}),
     ...(t.note ? { note: t.note } : {}),
   };
 }
@@ -323,28 +326,40 @@ tools.push(
     name: "list_todos",
     title: "ดู To-do",
     description:
-      "รายการสิ่งที่ต้องทำที่ไม่ผูกเวลา (เรียง: ติดดาว, ใกล้กำหนดส่ง). ค่าเริ่มต้นแสดงเฉพาะที่ยังไม่เสร็จ. ใช้ตอบคำถามประมาณ 'วันนี้ควรทำอะไรก่อน' ควบคู่กับ get_summary",
+      "รายการสิ่งที่ต้องทำที่ไม่ผูกเวลา เรียงตามความสำคัญแล้วกำหนดส่ง. ค่าเริ่มต้นแสดงเฉพาะที่ยังไม่เสร็จ; กรองด้วย status (todo/doing/done), category, min_priority, หรือ parent_id เพื่อดูงานย่อย. ใช้ตอบ 'วันนี้ควรทำอะไรก่อน' ควบคู่กับ get_summary",
     schema: z.object({
       include_done: z.boolean().optional().describe("รวมที่เสร็จแล้ว"),
       query: z.string().optional(),
+      status: z.enum(["todo", "doing", "done"]).optional(),
+      category: z.string().optional().describe("ชื่อหมวดหมู่"),
+      min_priority: z.enum(["low", "medium", "high"]).optional().describe("เฉพาะงานที่ priority ตั้งแต่ระดับนี้ขึ้นไป"),
+      parent_id: z.string().optional().describe("ดูเฉพาะงานย่อยของงานนี้"),
     }),
     annotations: { readOnlyHint: true },
-    run: async ({ include_done, query }) => {
-      const todos = await repo.listTodos({ includeDone: include_done, q: query });
-      return { count: todos.length, todos: todos.map(fmtTodo) };
+    run: async ({ include_done, query, status, category, min_priority, parent_id }) => {
+      const todos = await repo.listTodos({
+        includeDone: include_done,
+        q: query,
+        status,
+        category,
+        minPriority: min_priority ? TODO_PRIORITIES.indexOf(min_priority) : undefined,
+        parentId: parent_id,
+      });
+      const categories = (await repo.listCategories()).map((c) => c.name);
+      return { count: todos.length, categories, todos: todos.map(fmtTodo) };
     },
   }),
   define({
     name: "create_todo",
     title: "เพิ่ม To-do",
-    description: "เพิ่มสิ่งที่ต้องทำที่ไม่มีเวลาแน่นอน (กำหนดส่งเป็นวันที่ได้ ไม่บังคับ). ถ้ามีวันเวลาชัดเจนให้ใช้ create_event",
+    description: "เพิ่มสิ่งที่ต้องทำที่ไม่มีเวลาแน่นอน (กำหนดส่งเป็นวันที่ได้ ไม่บังคับ) ตั้ง priority, category ได้ และใส่ parent_id เพื่อสร้างงานย่อย. ถ้ามีวันเวลาชัดเจนให้ใช้ create_event",
     schema: todoCreateSchema,
     run: async (args) => ({ created: fmtTodo(await repo.createTodo(args)) }),
   }),
   define({
     name: "update_todo",
     title: "แก้ไข To-do",
-    description: "แก้ไข To-do ตาม id ใช้ done=true เมื่อทำเสร็จ, important=true เพื่อติดดาว",
+    description: "แก้ไข To-do ตาม id: status (todo/doing/done) หรือ done=true เมื่อทำเสร็จ, priority (none/low/medium/high), category, due_date",
     schema: todoUpdateSchema.extend({ id }),
     annotations: { idempotentHint: true },
     run: async ({ id, ...rest }) => {
