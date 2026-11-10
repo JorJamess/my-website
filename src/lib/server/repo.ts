@@ -7,3 +7,4 @@ export * from "@/modules/tasks/repo";
 export * from "@/modules/summary/repo";
 export * from "@/modules/habits/repo";
 export * from "@/modules/goals/repo";
+export * from "@/modules/analytics/repo";

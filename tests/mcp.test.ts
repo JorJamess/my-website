@@ -121,3 +121,21 @@ describe("goal tools", () => {
     await expect(call("link_to_goal", { goal_id: g.id, entity_type: "task", entity_id: "nope" })).rejects.toThrow();
   });
 });
+
+describe("analytics tool", () => {
+  it("returns plain counts for the week with a comparison and no score", async () => {
+    const t = (await call("create_todo", { title: "x" })).created;
+    await call("update_todo", { id: t.id, done: true });
+    const h = (await call("create_habit", { title: "Read", schedule_type: "daily" })).created;
+    await call("check_in_habit", { id: h.id });
+    const a = await call("get_analytics");
+    expect(a.period.range).toBe("week");
+    expect(a.tasks.completed).toBe(1);
+    expect(a.habits.each[0]).toMatchObject({ title: "Read", done: 1 });
+    expect(a.per_day.length).toBe(7);
+    expect(JSON.stringify(a)).not.toMatch(/score/);
+    const m = await call("get_analytics", { range: "month", offset: -1 });
+    expect(m.period.is_current).toBe(false);
+    expect(toolList().some((x) => x.name === "get_analytics")).toBe(true);
+  });
+});

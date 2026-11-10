@@ -4,10 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { ArrowLeft, CalendarDays, LayoutGrid, Sprout, Target, ListChecks, Loader2, LogOut, Moon, NotebookPen, Plug, Search, Settings, Sun } from "lucide-react";
+import { ArrowLeft, CalendarDays, ChartColumn, Ellipsis, LayoutGrid, Sprout, Target, ListChecks, Loader2, LogOut, Moon, NotebookPen, Plug, Search, Settings, Sun } from "lucide-react";
 import { api, UNAUTHORIZED_EVENT } from "@/lib/client/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { LoginScreen } from "./login-screen";
 import { Pupu } from "./pupu";
 import { SearchButton, SearchPalette } from "./search-palette";
@@ -20,6 +21,7 @@ const NAV = [
   { href: "/app/todos", label: "To do", icon: ListChecks },
   { href: "/app/habits", label: "Habits", icon: Sprout },
   { href: "/app/goals", label: "Goals", icon: Target },
+  { href: "/app/insights", label: "Insights", icon: ChartColumn },
   { href: "/app/notes", label: "Notes", icon: NotebookPen },
   { href: "/app/connect", label: "Claude", icon: Plug },
 ] as const;
@@ -119,9 +121,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
 
-        {/* Bottom nav (mobile) */}
-        <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-7 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
-          {NAV.map(({ href, label, icon: Icon }) => (
+        {/* Bottom nav (mobile): the five everyday pages, the rest under "More" */}
+        <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+          {NAV.slice(0, 5).map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}
@@ -135,6 +137,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {label}
             </Link>
           ))}
+          <Popover>
+            <PopoverTrigger
+              className={cn(
+                "flex flex-col items-center gap-0.5 py-2 text-[10.5px] text-muted-foreground",
+                NAV.slice(5).some((n) => isActive(n.href)) && "font-medium text-foreground",
+              )}
+            >
+              <Ellipsis className="size-5" strokeWidth={1.7} />
+              More
+            </PopoverTrigger>
+            <PopoverContent side="top" align="end" className="w-48 p-1.5">
+              {NAV.slice(5).map(({ href, label, icon: Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn("flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[14.5px] hover:bg-muted", isActive(href) && "bg-brand-soft font-medium")}
+                >
+                  <Icon className="size-[17px]" strokeWidth={1.7} />
+                  {label}
+                </Link>
+              ))}
+            </PopoverContent>
+          </Popover>
         </nav>
       </div>
       <SearchPalette open={searchOpen} onOpenChange={setSearchOpen} />

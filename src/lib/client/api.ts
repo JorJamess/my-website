@@ -1,5 +1,6 @@
 "use client";
 
+import type { Analytics } from "@/modules/analytics/repo";
 import type { CalendarEvent, Category, GoalDetail, GoalOverview, HabitOverview, Note, Summary, Todo } from "@/lib/types";
 import type { MoneyCalendar, MoneySummary, MoneyTransaction } from "@/lib/money-types";
 import type { EventCreateInput, EventUpdateInput, NoteCreateInput, NoteUpdateInput, TodoCreateInput, TodoUpdateInput, HabitCreateInput, HabitUpdateInput, CheckinInput, GoalCreateInput, GoalUpdateInput, MilestoneCreateInput, MilestoneUpdateInput, GoalLinkInput } from "@/lib/schemas";
@@ -82,6 +83,7 @@ export const api = {
   deleteHabit: (id: string) => request<{ ok: true }>(`/api/habits/${id}`, json("DELETE")),
   checkin: (id: string, input: CheckinInput) => request<{ ok: true }>(`/api/habits/${id}/checkins`, json("PUT", input)),
 
+  analytics: (range: "week" | "month", offset = 0) => request<Analytics>(`/api/analytics?range=${range}&offset=${offset}`),
   goals: (all = false) =>
     request<{ goals: GoalOverview[]; categories: Category[] }>(`/api/goals${all ? "?all=1" : ""}`),
   goal: (id: string) => request<{ goal: GoalDetail; categories: Category[] }>(`/api/goals/${id}`),

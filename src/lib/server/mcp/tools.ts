@@ -307,6 +307,47 @@ export const tools: ToolDef[] = [
 
 tools.push(
   define({
+    name: "get_analytics",
+    title: "รีวิวสัปดาห์/เดือน (Analytics)",
+    description:
+      "ตัวเลขจริงของสัปดาห์ (จันทร์-อาทิตย์) หรือเดือน เทียบกับช่วงก่อนหน้า: งานที่เสร็จ/ครบกำหนดแล้วเสร็จ/ค้าง/เลยกำหนด, ความสม่ำเสมอของแต่ละ habit (ทำจากกี่วันที่ต้องทำ) พร้อม streak, milestone ที่เสร็จ และความคืบหน้าของเป้าหมาย ไม่มีคะแนนรวม ให้สรุปจากตัวเลขเหล่านี้เอง. offset=0 คือช่วงปัจจุบัน, -1 คือช่วงก่อนหน้า",
+    schema: z.object({
+      range: z.enum(["week", "month"]).optional().describe("ค่าเริ่มต้น week"),
+      offset: z.number().int().min(-60).max(0).optional().describe("ย้อนกลับกี่ช่วง (0 = ช่วงนี้)"),
+    }),
+    annotations: { readOnlyHint: true },
+    run: async ({ range, offset }) => {
+      const a = await repo.getAnalytics({ range, offset });
+      const r = (x: number | null) => (x === null ? null : Math.round(x * 100) / 100);
+      return {
+        period: { range: a.range, from: a.start, to: a.end, is_current: a.isCurrent, compared_with: `${a.prevStart} to ${a.prevEnd}` },
+        tasks: {
+          completed: a.tasks.completed,
+          completed_previous_period: a.tasks.prevCompleted,
+          created: a.tasks.created,
+          due_in_period: { total: a.tasks.due.total, done: a.tasks.due.done, rate: r(a.tasks.due.rate) },
+          due_in_previous_period: { total: a.tasks.prevDue.total, done: a.tasks.prevDue.done, rate: r(a.tasks.prevDue.rate) },
+          open_now: a.tasks.open,
+          overdue_now: a.tasks.overdue,
+        },
+        habits: {
+          check_ins: a.habits.checkins,
+          check_ins_previous_period: a.habits.prevCheckins,
+          overall: { done: a.habits.done, scheduled: a.habits.scheduled, rate: r(a.habits.rate), previous_rate: r(a.habits.prevRate) },
+          each: a.habits.list.map((h) => ({ title: h.title, done: h.done, scheduled: h.scheduled, rate: r(h.rate), current_streak: h.current_streak, longest_streak: h.longest_streak })),
+        },
+        goals: {
+          active: a.goals.active,
+          completed_in_period: a.goals.completed,
+          milestones_done: a.goals.milestonesDone,
+          milestones_done_previous_period: a.goals.prevMilestonesDone,
+          progress_now: a.goals.progress.map((g) => ({ title: g.title, percent: g.percent === null ? null : Math.round(g.percent * 100), days_left: g.days_left, overdue: g.overdue })),
+        },
+        per_day: a.days.map((d) => ({ day: d.day, tasks_done: d.tasks, habit_check_ins: d.habits, milestones_done: d.milestones })),
+      };
+    },
+  }),
+  define({
     name: "list_goals",
     title: "ดูเป้าหมาย (Goals)",
     description: "รายการเป้าหมายพร้อมความคืบหน้า (นับ milestone และ task ที่ผูกไว้ ทำแล้วกี่จากกี่) วันที่เหลือ และจำนวนสิ่งที่ผูกไว้ ค่าเริ่มต้นแสดงเฉพาะที่ active/paused",

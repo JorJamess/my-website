@@ -14,6 +14,8 @@ A personal site with two parts: a public bilingual portfolio at `/` and `/th`, a
   - Today: the day as a timeline, what comes next, a quick note, recent notes.
   - Calendar: a month view with all-day and multi-day events, a done checkbox and a side panel per day.
   - Notes: search, pin, Markdown text.
+  - Habits (daily, certain weekdays or every few days, with streaks and a 12-week history), Goals (milestones plus linked tasks, habits, events and notes) and To-dos with priority, status, categories and subtasks.
+  - Insights: weekly and monthly counts with the previous period beside them, and simple charts. No made-up score.
   - Messages from the portfolio's contact form, shown on Today.
   - Money: this month's income and spending, read from a separate expenses app over a read-only API.
   - Settings: weekly backups (download or restore any of them), log out of all devices, a cookie-free visit counter for the portfolio, and install-as-app.
