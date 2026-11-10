@@ -29,7 +29,7 @@ A personal site with two parts: a public bilingual portfolio at `/` and `/th`, a
 ## Checks
 
 ```bash
-npm run check    # typecheck, lint and tests
+npm run check    # typecheck, lint, tests and a production build
 ```
 
 The tests run against the real migrations on an in-memory SQLite, so they need no Cloudflare login. CI runs the same checks on every push.

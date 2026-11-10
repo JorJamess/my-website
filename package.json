@@ -15,7 +15,7 @@
     "db:migrate:remote": "wrangler d1 migrations apply my-website-db --remote",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run typecheck && npm run lint && npm test"
+    "check": "npm run typecheck && npm run lint && npm test && next build"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.20.16",
