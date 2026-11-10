@@ -96,6 +96,7 @@ export async function updateNote(id: string, input: NoteUpdateInput): Promise<No
 
 export async function deleteNote(id: string): Promise<boolean> {
   const { db } = await ctx();
+  await db.prepare("DELETE FROM goal_links WHERE entity_type = 'note' AND entity_id = ?").bind(id).run();
   const r = await db.prepare("DELETE FROM notes WHERE id = ?").bind(id).run();
   return (r.meta.changes ?? 0) > 0;
 }

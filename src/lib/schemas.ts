@@ -66,6 +66,38 @@ export const categorySchema = z.object({
   color: z.enum(EVENT_COLORS).optional(),
 });
 
+const goalStatus = z.enum(["active", "paused", "done", "cancelled"]);
+
+export const goalCreateSchema = z.object({
+  title: z.string().min(1).max(200).describe("ชื่อเป้าหมาย เช่น สอบ Japanese N4 ผ่าน"),
+  description: z.string().max(5000).nullable().optional(),
+  horizon: z.enum(["short", "long"]).optional().describe("short = ระยะสั้น, long = ระยะยาว (ค่าเริ่มต้น short)"),
+  category: z.string().min(1).max(60).nullable().optional().describe("ชื่อหมวดหมู่ของเป้าหมาย"),
+  priority: priorityName.optional(),
+  status: goalStatus.optional(),
+  color: z.enum(EVENT_COLORS).optional(),
+  start_date: dateKey.nullable().optional(),
+  target_date: dateKey.nullable().optional().describe("วันที่ตั้งเป้า YYYY-MM-DD"),
+});
+
+export const goalUpdateSchema = goalCreateSchema.partial();
+
+export const milestoneCreateSchema = z.object({
+  title: z.string().min(1).max(200).describe("ชื่อหมุดหมาย เช่น จบไวยากรณ์บทที่ 1-10"),
+  due_date: dateKey.nullable().optional(),
+});
+
+export const milestoneUpdateSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  due_date: dateKey.nullable().optional(),
+  done: z.boolean().optional().describe("ทำหมุดหมายนี้สำเร็จแล้วหรือยัง"),
+});
+
+export const goalLinkSchema = z.object({
+  entity_type: z.enum(["task", "habit", "event", "note"]).describe("ชนิดของสิ่งที่จะผูกกับเป้าหมาย"),
+  entity_id: z.string().min(1).describe("id ของ task/habit/event/note นั้น"),
+});
+
 export const noteCreateSchema = z.object({
   title: z.string().min(1).max(200).describe("หัวข้อบันทึก"),
   content: z.string().max(50000).optional().describe("เนื้อหา (รองรับ Markdown)"),
@@ -135,3 +167,8 @@ export type HabitCreateInput = z.infer<typeof habitCreateSchema>;
 export type HabitUpdateInput = z.infer<typeof habitUpdateSchema>;
 export type CheckinInput = z.infer<typeof checkinSchema>;
 export type CategoryInput = z.infer<typeof categorySchema>;
+export type GoalCreateInput = z.infer<typeof goalCreateSchema>;
+export type GoalUpdateInput = z.infer<typeof goalUpdateSchema>;
+export type MilestoneCreateInput = z.infer<typeof milestoneCreateSchema>;
+export type MilestoneUpdateInput = z.infer<typeof milestoneUpdateSchema>;
+export type GoalLinkInput = z.infer<typeof goalLinkSchema>;

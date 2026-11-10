@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays, ListChecks, NotebookPen, Search } from "lucide-react";
+import { CalendarDays, ListChecks, NotebookPen, Search, Sprout, Target } from "lucide-react";
 import { api } from "@/lib/client/api";
 import { eventTimeLabel, formatDay, splitLocal } from "@/lib/time";
 import type { CalendarEvent, Note, Todo } from "@/lib/types";
@@ -10,7 +10,13 @@ import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { EventDialog } from "./event-dialog";
 
-type Results = { events: CalendarEvent[]; notes: Note[]; todos: Todo[] };
+type Results = {
+  events: CalendarEvent[];
+  notes: Note[];
+  todos: Todo[];
+  habits: { id: string; title: string; archived: boolean }[];
+  goals: { id: string; title: string; status: string }[];
+};
 type Item = { key: string; icon: typeof Search; title: string; hint: string; go: () => void };
 
 export function SearchButton({ onClick, className }: { onClick: () => void; className?: string }) {
@@ -48,7 +54,7 @@ export function SearchPalette({ open, onOpenChange }: { open: boolean; onOpenCha
       api
         .search(term)
         .then((r) => id === seq.current && (setRes(r), setActive(0)))
-        .catch(() => id === seq.current && setRes({ events: [], notes: [], todos: [] }));
+        .catch(() => id === seq.current && setRes({ events: [], notes: [], todos: [], habits: [], goals: [] }));
     }, 180);
     return () => clearTimeout(t);
   }, [q, open]);
@@ -70,6 +76,26 @@ export function SearchPalette({ open, onOpenChange }: { open: boolean; onOpenCha
           go: () => {
             close();
             setEvent(e);
+          },
+        })),
+        ...shown.goals.map((g) => ({
+          key: `g${g.id}`,
+          icon: Target,
+          title: g.title,
+          hint: g.status === "active" ? "Goal" : `Goal · ${g.status}`,
+          go: () => {
+            close();
+            router.push(`/app/goals/${g.id}`);
+          },
+        })),
+        ...shown.habits.map((h) => ({
+          key: `h${h.id}`,
+          icon: Sprout,
+          title: h.title,
+          hint: h.archived ? "Habit · archived" : "Habit",
+          go: () => {
+            close();
+            router.push("/app/habits");
           },
         })),
         ...shown.todos.map((t) => ({
@@ -114,7 +140,7 @@ export function SearchPalette({ open, onOpenChange }: { open: boolean; onOpenCha
       <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(true) : close())}>
         <DialogContent showCloseButton={false} className="top-[18%] translate-y-0 gap-0 p-0 sm:max-w-lg">
           <DialogTitle className="sr-only">Search</DialogTitle>
-          <DialogDescription className="sr-only">Search events, to-dos and notes</DialogDescription>
+          <DialogDescription className="sr-only">Search goals, habits, events, to-dos and notes</DialogDescription>
           <div className="flex items-center gap-2 border-b px-4">
             <Search className="size-4 shrink-0 text-muted-foreground" />
             <input
@@ -122,7 +148,7 @@ export function SearchPalette({ open, onOpenChange }: { open: boolean; onOpenCha
               value={q}
               onChange={(e) => setQ(e.target.value)}
               onKeyDown={onKey}
-              placeholder="Search events, to-dos and notes…"
+              placeholder="Search goals, habits, events, to-dos and notes…"
               aria-label="Search"
               className="h-12 w-full bg-transparent text-[15px] outline-none placeholder:text-muted-foreground"
             />

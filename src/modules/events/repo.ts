@@ -170,6 +170,7 @@ export async function updateEvent(id: string, input: EventUpdateInput): Promise<
 export async function deleteEvent(id: string): Promise<boolean> {
   const { db } = await ctx();
   await db.prepare("UPDATE notes SET event_id = NULL WHERE event_id = ?").bind(id).run();
+  await db.prepare("DELETE FROM goal_links WHERE entity_type = 'event' AND entity_id = ?").bind(id).run();
   const r = await db.prepare("DELETE FROM events WHERE id = ?").bind(id).run();
   return (r.meta.changes ?? 0) > 0;
 }

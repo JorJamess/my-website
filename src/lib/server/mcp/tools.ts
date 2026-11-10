@@ -10,6 +10,11 @@ import {
   habitCreateSchema,
   habitUpdateSchema,
   checkinSchema,
+  goalCreateSchema,
+  goalUpdateSchema,
+  milestoneCreateSchema,
+  milestoneUpdateSchema,
+  goalLinkSchema,
 } from "@/lib/schemas";
 import * as repo from "@/lib/server/repo";
 import { listMessages, setMessageRead } from "@/lib/server/messages";
@@ -18,7 +23,7 @@ import { getEnv } from "@/lib/server/env";
 import { addDaysKey, formatLocal, localDateKey } from "@/lib/time";
 import { repeatLabel } from "@/lib/recurrence";
 import { scheduleLabel } from "@/lib/habits";
-import { TODO_PRIORITIES, type CalendarEvent, type HabitOverview, type HabitToday, type Note, type Todo } from "@/lib/types";
+import { GOAL_STATUSES, TODO_PRIORITIES, type CalendarEvent, type GoalDetail, type GoalOverview, type HabitOverview, type HabitToday, type Note, type Todo } from "@/lib/types";
 
 type ToolDef = {
   name: string;
@@ -88,6 +93,41 @@ function fmtHabit(h: HabitOverview) {
 }
 const fmtHabitToday = (h: HabitToday) => ({ id: h.id, title: h.title, done: h.done, current_streak: h.current_streak });
 
+function fmtGoal(g: GoalOverview) {
+  const p = g.progress;
+  return {
+    id: g.id,
+    title: g.title,
+    status: g.status,
+    horizon: g.horizon,
+    priority: TODO_PRIORITIES[g.priority] ?? "none",
+    ...(g.category ? { category: g.category.name } : {}),
+    start_date: g.start_date,
+    target_date: g.target_date,
+    days_left: g.days_left,
+    overdue: g.overdue,
+    // raw counts first; percent is just done/total across milestones and linked tasks (null = nothing to measure yet)
+    progress: {
+      milestones: `${p.milestones.done}/${p.milestones.total}`,
+      linked_tasks: `${p.tasks.done}/${p.tasks.total}`,
+      percent: p.percent === null ? null : Math.round(p.percent * 100),
+    },
+    linked: g.link_counts,
+    ...(g.description ? { description: g.description } : {}),
+  };
+}
+
+function fmtGoalDetail(g: GoalDetail) {
+  return {
+    ...fmtGoal(g),
+    milestones: g.milestones.map((m) => ({ id: m.id, title: m.title, done: !!m.done_at, due_date: m.due_date })),
+    tasks: g.links.tasks.map(fmtTodo),
+    habits: g.links.habits.map((h) => ({ id: h.id, title: h.title, current_streak: h.current_streak, rate_30d: h.rate_30d === null ? null : Math.round(h.rate_30d * 100) / 100 })),
+    events: g.links.events.map((e) => ({ id: e.id, title: e.title, start: e.all_day ? e.start_at.slice(0, 10) : e.start_at })),
+    notes: g.links.notes,
+  };
+}
+
 function fmtNote(n: Note, full = true) {
   return {
     id: n.id,
@@ -116,7 +156,7 @@ export const tools: ToolDef[] = [
     name: "get_summary",
     title: "สรุปกำหนดการ",
     description:
-      "สรุปภาพรวม: งานวันนี้ (รวมงานที่ทำซ้ำ), งานที่กำลังจะมาถึงใน N วัน, งานที่เลยกำหนดแต่ยังไม่เสร็จ, To-do ที่ยังไม่เสร็จ, นิสัย (habits) ที่ต้องทำวันนี้, บันทึกล่าสุด และสถิติสัปดาห์/เดือน",
+      "สรุปภาพรวม: งานวันนี้ (รวมงานที่ทำซ้ำ), งานที่กำลังจะมาถึงใน N วัน, งานที่เลยกำหนดแต่ยังไม่เสร็จ, To-do ที่ยังไม่เสร็จ, นิสัย (habits) ที่ต้องทำวันนี้, เป้าหมาย (goals) ที่กำลังทำ, บันทึกล่าสุด และสถิติสัปดาห์/เดือน",
     schema: z.object({
       days: z.number().int().min(1).max(60).optional().describe("จำนวนวันข้างหน้าที่จะดู (ค่าเริ่มต้น 7)"),
     }),
@@ -131,6 +171,7 @@ export const tools: ToolDef[] = [
         overdue_not_done: s.overdue.map((e) => fmtEvent(e, tz)),
         open_todos: s.todos.map(fmtTodo),
         habits_today: s.habitsToday.map(fmtHabitToday),
+        active_goals: s.goalsActive.map((g) => ({ id: g.id, title: g.title, percent: g.percent === null ? null : Math.round(g.percent * 100), days_left: g.days_left, overdue: g.overdue })),
         recent_notes: s.recentNotes.map((n) => fmtNote(n, false)),
         counts: s.counts,
       };
@@ -263,6 +304,111 @@ export const tools: ToolDef[] = [
 ];
 
 tools.push(
+  define({
+    name: "list_goals",
+    title: "ดูเป้าหมาย (Goals)",
+    description: "รายการเป้าหมายพร้อมความคืบหน้า (นับ milestone และ task ที่ผูกไว้ ทำแล้วกี่จากกี่) วันที่เหลือ และจำนวนสิ่งที่ผูกไว้ ค่าเริ่มต้นแสดงเฉพาะที่ active/paused",
+    schema: z.object({ status: z.enum(GOAL_STATUSES).optional(), include_inactive: z.boolean().optional() }),
+    annotations: { readOnlyHint: true },
+    run: async ({ status, include_inactive }) => {
+      const goals = await repo.listGoals({ status, includeInactive: include_inactive });
+      return { count: goals.length, goals: goals.map(fmtGoal) };
+    },
+  }),
+  define({
+    name: "get_goal",
+    title: "ดูรายละเอียดเป้าหมาย",
+    description: "เป้าหมายเดียวแบบละเอียด: milestones และ tasks/habits/events/notes ที่ผูกไว้ พร้อม streak ของ habits",
+    schema: z.object({ id }),
+    annotations: { readOnlyHint: true },
+    run: async ({ id }) => {
+      const g = await repo.getGoalDetail(id);
+      if (!g) throw new repo.InputError(`ไม่พบเป้าหมาย id=${id}`);
+      return fmtGoalDetail(g);
+    },
+  }),
+  define({
+    name: "create_goal",
+    title: "สร้างเป้าหมาย",
+    description: "สร้างเป้าหมาย (horizon: short/long) แล้วใช้ add_milestone และ link_to_goal เพื่อแตกเป็นหมุดหมายและผูกกับ task/habit/event/note ที่เกี่ยวข้อง",
+    schema: goalCreateSchema,
+    run: async (args) => ({ created: fmtGoal(await repo.createGoal(args)) }),
+  }),
+  define({
+    name: "update_goal",
+    title: "แก้ไขเป้าหมาย",
+    description: "แก้ไขเป้าหมายตาม id (status: active/paused/done/cancelled)",
+    schema: goalUpdateSchema.extend({ id }),
+    annotations: { idempotentHint: true },
+    run: async ({ id, ...rest }) => {
+      const g = await repo.updateGoal(id, rest);
+      if (!g) throw new repo.InputError(`ไม่พบเป้าหมาย id=${id}`);
+      return { updated: fmtGoal(g) };
+    },
+  }),
+  define({
+    name: "delete_goal",
+    title: "ลบเป้าหมาย",
+    description: "ลบเป้าหมายพร้อม milestones และการผูก (task/habit/event/note ที่ผูกไว้ไม่ถูกลบ)",
+    schema: z.object({ id }),
+    annotations: { destructiveHint: true, idempotentHint: true },
+    run: async ({ id }) => {
+      if (!(await repo.deleteGoal(id))) throw new repo.InputError(`ไม่พบเป้าหมาย id=${id}`);
+      return { deleted: id };
+    },
+  }),
+  define({
+    name: "add_milestone",
+    title: "เพิ่ม milestone",
+    description: "เพิ่มหมุดหมายให้เป้าหมาย",
+    schema: milestoneCreateSchema.extend({ goal_id: z.string().min(1) }),
+    run: async ({ goal_id, ...rest }) => ({ created: await repo.addMilestone(goal_id, rest) }),
+  }),
+  define({
+    name: "update_milestone",
+    title: "แก้ไข/ติ๊ก milestone",
+    description: "ติ๊กว่าสำเร็จ (done=true) หรือยกเลิก แก้ชื่อ/วันที่ของ milestone",
+    schema: milestoneUpdateSchema.extend({ id }),
+    annotations: { idempotentHint: true },
+    run: async ({ id, ...rest }) => {
+      const m = await repo.updateMilestone(id, rest);
+      if (!m) throw new repo.InputError(`ไม่พบ milestone id=${id}`);
+      return { updated: { id: m.id, title: m.title, done: !!m.done_at, due_date: m.due_date } };
+    },
+  }),
+  define({
+    name: "delete_milestone",
+    title: "ลบ milestone",
+    description: "ลบ milestone ตาม id",
+    schema: z.object({ id }),
+    annotations: { destructiveHint: true, idempotentHint: true },
+    run: async ({ id }) => {
+      if (!(await repo.deleteMilestone(id))) throw new repo.InputError(`ไม่พบ milestone id=${id}`);
+      return { deleted: id };
+    },
+  }),
+  define({
+    name: "link_to_goal",
+    title: "ผูกกับเป้าหมาย",
+    description: "ผูก task, habit, event หรือ note เข้ากับเป้าหมาย (ผูกซ้ำได้ไม่เป็นไร). task ที่ผูกไว้จะนับในความคืบหน้าของเป้าหมาย",
+    schema: goalLinkSchema.extend({ goal_id: z.string().min(1) }),
+    annotations: { idempotentHint: true },
+    run: async ({ goal_id, ...rest }) => {
+      await repo.linkToGoal(goal_id, rest);
+      return { linked: { goal_id, ...rest } };
+    },
+  }),
+  define({
+    name: "unlink_from_goal",
+    title: "เลิกผูกกับเป้าหมาย",
+    description: "เลิกผูก (ไม่ลบ task/habit/event/note นั้น)",
+    schema: goalLinkSchema.extend({ goal_id: z.string().min(1) }),
+    annotations: { idempotentHint: true },
+    run: async ({ goal_id, ...rest }) => {
+      if (!(await repo.unlinkFromGoal(goal_id, rest))) throw new repo.InputError("ไม่พบการผูกนี้");
+      return { unlinked: { goal_id, ...rest } };
+    },
+  }),
   define({
     name: "list_habits",
     title: "ดูนิสัย (Habits)",

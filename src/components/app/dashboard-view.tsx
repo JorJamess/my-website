@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { EventDialog } from "./event-dialog";
 import { AddTodo, TodoItem } from "./todo-list";
+import { GoalsToday } from "./goals-today";
 import { HabitsToday } from "./habits-today";
 import { MessagesCard } from "./messages-card";
 import { MoneyCard } from "./money-card";
@@ -136,6 +137,7 @@ export function DashboardView() {
 
         <div className="min-w-0 space-y-8">
           <MessagesCard />
+          {data?.goalsActive.length ? <GoalsToday goals={data.goalsActive} /> : null}
           {data?.habitsToday.length ? <HabitsToday habits={data.habitsToday} /> : null}
           <div>
             <SectionLabel>

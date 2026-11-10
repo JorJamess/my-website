@@ -1,8 +1,8 @@
 "use client";
 
-import type { CalendarEvent, Category, HabitOverview, Note, Summary, Todo } from "@/lib/types";
+import type { CalendarEvent, Category, GoalDetail, GoalOverview, HabitOverview, Note, Summary, Todo } from "@/lib/types";
 import type { MoneyCalendar, MoneySummary, MoneyTransaction } from "@/lib/money-types";
-import type { EventCreateInput, EventUpdateInput, NoteCreateInput, NoteUpdateInput, TodoCreateInput, TodoUpdateInput, HabitCreateInput, HabitUpdateInput, CheckinInput } from "@/lib/schemas";
+import type { EventCreateInput, EventUpdateInput, NoteCreateInput, NoteUpdateInput, TodoCreateInput, TodoUpdateInput, HabitCreateInput, HabitUpdateInput, CheckinInput, GoalCreateInput, GoalUpdateInput, MilestoneCreateInput, MilestoneUpdateInput, GoalLinkInput } from "@/lib/schemas";
 
 export const UNAUTHORIZED_EVENT = "mw:unauthorized";
 export const DATA_CHANGED_EVENT = "mw:data-changed";
@@ -67,7 +67,13 @@ export const api = {
   deleteTodo: (id: string) => request<{ ok: true }>(`/api/todos/${id}`, json("DELETE")),
 
   search: (q: string) =>
-    request<{ events: CalendarEvent[]; notes: Note[]; todos: Todo[] }>(`/api/search?q=${encodeURIComponent(q)}`),
+    request<{
+      events: CalendarEvent[];
+      notes: Note[];
+      todos: Todo[];
+      habits: { id: string; title: string; archived: boolean }[];
+      goals: { id: string; title: string; status: string }[];
+    }>(`/api/search?q=${encodeURIComponent(q)}`),
 
   habits: (includeArchived = false) =>
     request<{ habits: HabitOverview[] }>(`/api/habits${includeArchived ? "?archived=1" : ""}`).then((r) => r.habits),
@@ -75,6 +81,19 @@ export const api = {
   updateHabit: (id: string, input: HabitUpdateInput) => request<{ habit: unknown }>(`/api/habits/${id}`, json("PATCH", input)),
   deleteHabit: (id: string) => request<{ ok: true }>(`/api/habits/${id}`, json("DELETE")),
   checkin: (id: string, input: CheckinInput) => request<{ ok: true }>(`/api/habits/${id}/checkins`, json("PUT", input)),
+
+  goals: (all = false) =>
+    request<{ goals: GoalOverview[]; categories: Category[] }>(`/api/goals${all ? "?all=1" : ""}`),
+  goal: (id: string) => request<{ goal: GoalDetail; categories: Category[] }>(`/api/goals/${id}`),
+  createGoal: (input: GoalCreateInput) => request<{ goal: GoalOverview }>("/api/goals", json("POST", input)).then((r) => r.goal),
+  updateGoal: (id: string, input: GoalUpdateInput) => request<{ goal: GoalOverview }>(`/api/goals/${id}`, json("PATCH", input)).then((r) => r.goal),
+  deleteGoal: (id: string) => request<{ ok: true }>(`/api/goals/${id}`, json("DELETE")),
+  addMilestone: (goalId: string, input: MilestoneCreateInput) => request<{ milestone: unknown }>(`/api/goals/${goalId}/milestones`, json("POST", input)),
+  updateMilestone: (goalId: string, id: string, input: MilestoneUpdateInput) =>
+    request<{ milestone: unknown }>(`/api/goals/${goalId}/milestones/${id}`, json("PATCH", input)),
+  deleteMilestone: (goalId: string, id: string) => request<{ ok: true }>(`/api/goals/${goalId}/milestones/${id}`, json("DELETE")),
+  linkGoal: (goalId: string, input: GoalLinkInput) => request<{ ok: true }>(`/api/goals/${goalId}/links`, json("POST", input)),
+  unlinkGoal: (goalId: string, input: GoalLinkInput) => request<{ ok: true }>(`/api/goals/${goalId}/links`, json("DELETE", input)),
 
   notes: (q?: string) =>
     request<{ notes: Note[] }>(`/api/notes${q ? `?q=${encodeURIComponent(q)}` : ""}`).then((r) => r.notes),

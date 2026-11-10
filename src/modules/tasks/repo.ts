@@ -49,23 +49,23 @@ const ORDER = `ORDER BY t.done ASC, t.priority DESC, t.due_date IS NULL, t.due_d
 
 /* --------------------------- Categories --------------------------- */
 
-export async function listCategories(): Promise<Category[]> {
+export async function listCategories(kind = "task"): Promise<Category[]> {
   const { db } = await ctx();
-  const { results } = await db.prepare("SELECT id, name, color, kind FROM categories WHERE kind = 'task' ORDER BY name COLLATE NOCASE").all<Category>();
+  const { results } = await db.prepare("SELECT id, name, color, kind FROM categories WHERE kind = ? ORDER BY name COLLATE NOCASE").bind(kind).all<Category>();
   return results;
 }
 
 /** Find a task category by name (case-insensitive), creating it when missing. */
-async function categoryIdFor(name: string): Promise<string> {
+export async function categoryIdFor(name: string, kind = "task"): Promise<string> {
   const { db } = await ctx();
   const clean = name.trim();
   if (!clean) throw new InputError("Category name can't be empty");
-  const found = await db.prepare("SELECT id FROM categories WHERE kind = 'task' AND name = ? COLLATE NOCASE").bind(clean).first<{ id: string }>();
+  const found = await db.prepare("SELECT id FROM categories WHERE kind = ?1 AND name = ?2 COLLATE NOCASE").bind(kind, clean).first<{ id: string }>();
   if (found) return found.id;
   const id = crypto.randomUUID();
   await db
-    .prepare("INSERT INTO categories (id, name, color, kind, created_at) VALUES (?, ?, 'gray', 'task', ?)")
-    .bind(id, clean, new Date().toISOString())
+    .prepare("INSERT INTO categories (id, name, color, kind, created_at) VALUES (?, ?, 'gray', ?, ?)")
+    .bind(id, clean, kind, new Date().toISOString())
     .run();
   return id;
 }
@@ -92,11 +92,22 @@ export async function updateCategory(id: string, input: Partial<CategoryInput>):
 export async function deleteCategory(id: string): Promise<boolean> {
   const { db } = await ctx();
   await db.prepare("UPDATE todos SET category_id = NULL WHERE category_id = ?").bind(id).run();
+  await db.prepare("UPDATE goals SET category_id = NULL WHERE category_id = ?").bind(id).run();
   const r = await db.prepare("DELETE FROM categories WHERE id = ?").bind(id).run();
   return (r.meta.changes ?? 0) > 0;
 }
 
 /* ----------------------------- To-dos ----------------------------- */
+
+export async function listTodosByIds(ids: string[]): Promise<Todo[]> {
+  if (!ids.length) return [];
+  const { db } = await ctx();
+  const { results } = await db
+    .prepare(`${SELECT} WHERE t.id IN (${ids.map((_, i) => `?${i + 1}`).join(",")}) ${ORDER}`)
+    .bind(...ids)
+    .all<TodoRow>();
+  return results.map(toTodo);
+}
 
 export async function listTodos(
   opts: { includeDone?: boolean; q?: string; limit?: number; status?: TodoStatus; category?: string; minPriority?: number; parentId?: string | null } = {},
@@ -201,6 +212,7 @@ export async function updateTodo(id: string, input: TodoUpdateInput): Promise<To
 /** Deletes the task and its subtasks. */
 export async function deleteTodo(id: string): Promise<boolean> {
   const { db } = await ctx();
+  await db.prepare("DELETE FROM goal_links WHERE entity_type = 'task' AND entity_id IN (SELECT id FROM todos WHERE parent_id = ?1 OR id = ?1)").bind(id).run();
   await db.prepare("DELETE FROM todos WHERE parent_id = ?").bind(id).run();
   const r = await db.prepare("DELETE FROM todos WHERE id = ?").bind(id).run();
   return (r.meta.changes ?? 0) > 0;

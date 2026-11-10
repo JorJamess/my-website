@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { ArrowLeft, CalendarDays, LayoutGrid, Sprout, ListChecks, Loader2, LogOut, Moon, NotebookPen, Plug, Search, Settings, Sun } from "lucide-react";
+import { ArrowLeft, CalendarDays, LayoutGrid, Sprout, Target, ListChecks, Loader2, LogOut, Moon, NotebookPen, Plug, Search, Settings, Sun } from "lucide-react";
 import { api, UNAUTHORIZED_EVENT } from "@/lib/client/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ const NAV = [
   { href: "/app/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/app/todos", label: "To do", icon: ListChecks },
   { href: "/app/habits", label: "Habits", icon: Sprout },
+  { href: "/app/goals", label: "Goals", icon: Target },
   { href: "/app/notes", label: "Notes", icon: NotebookPen },
   { href: "/app/connect", label: "Claude", icon: Plug },
 ] as const;
@@ -119,14 +120,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </main>
 
         {/* Bottom nav (mobile) */}
-        <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-7 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
           {NAV.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}
               aria-current={isActive(href) ? "page" : undefined}
               className={cn(
-                "flex flex-col items-center gap-0.5 py-2 text-[11px] text-muted-foreground",
+                "flex flex-col items-center gap-0.5 py-2 text-[10.5px] text-muted-foreground",
                 isActive(href) && "font-medium text-foreground",
               )}
             >

@@ -62,6 +62,7 @@ export type Summary = {
   overdue: CalendarEvent[];
   todos: Todo[];
   habitsToday: HabitToday[];
+  goalsActive: GoalBrief[];
   recentNotes: Note[];
   counts: { thisWeek: number; thisMonth: number; doneThisWeek: number; notes: number; todosOpen: number };
 };
@@ -102,3 +103,55 @@ export type HabitOverview = Habit & {
 };
 
 export type HabitToday = { id: string; title: string; color: EventColor; done: boolean; current_streak: number };
+
+export const GOAL_STATUSES = ["active", "paused", "done", "cancelled"] as const;
+export type GoalStatus = (typeof GOAL_STATUSES)[number];
+export type GoalHorizon = "short" | "long";
+export const GOAL_LINK_TYPES = ["task", "habit", "event", "note"] as const;
+export type GoalLinkType = (typeof GOAL_LINK_TYPES)[number];
+
+export type Goal = {
+  id: string;
+  title: string;
+  description: string | null;
+  horizon: GoalHorizon;
+  category: { id: string; name: string; color: EventColor } | null;
+  priority: number; // 0 none, 1 low, 2 medium, 3 high
+  status: GoalStatus;
+  color: EventColor;
+  start_date: string | null;
+  target_date: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Milestone = { id: string; goal_id: string; title: string; due_date: string | null; done_at: string | null; sort_order: number };
+
+export type GoalProgress = {
+  milestones: { done: number; total: number };
+  tasks: { done: number; total: number };
+  /** (milestones done + tasks done) / (milestones + tasks); null when there is nothing to measure yet */
+  percent: number | null;
+};
+
+export type GoalOverview = Goal & {
+  progress: GoalProgress;
+  /** whole days until the target date (negative = past); null without a target date */
+  days_left: number | null;
+  /** active, has a target date and it has passed */
+  overdue: boolean;
+  link_counts: { task: number; habit: number; event: number; note: number };
+};
+
+export type GoalDetail = GoalOverview & {
+  milestones: Milestone[];
+  links: {
+    tasks: Todo[];
+    habits: { id: string; title: string; color: EventColor; current_streak: number; rate_30d: number | null; archived: boolean }[];
+    events: { id: string; title: string; start_at: string; all_day: boolean; color: EventColor }[];
+    notes: { id: string; title: string }[];
+  };
+};
+
+export type GoalBrief = { id: string; title: string; color: EventColor; percent: number | null; days_left: number | null; target_date: string | null; overdue: boolean };

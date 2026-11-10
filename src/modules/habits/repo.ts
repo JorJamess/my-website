@@ -99,6 +99,7 @@ export async function updateHabit(id: string, input: HabitUpdateInput): Promise<
 export async function deleteHabit(id: string): Promise<boolean> {
   const { db } = await ctx();
   await db.prepare("DELETE FROM habit_checkins WHERE habit_id = ?").bind(id).run();
+  await db.prepare("DELETE FROM goal_links WHERE entity_type = 'habit' AND entity_id = ?").bind(id).run();
   const r = await db.prepare("DELETE FROM habits WHERE id = ?").bind(id).run();
   return (r.meta.changes ?? 0) > 0;
 }
