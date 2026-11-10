@@ -173,3 +173,16 @@ export type NoteDetail = Note & {
 export type NoteFolder = { id: string; name: string; count: number };
 export const NOTE_LINK_TYPES = ["task", "event", "goal"] as const;
 export type NoteLinkType = (typeof NOTE_LINK_TYPES)[number];
+
+export const SEARCH_TYPES = ["notes", "tasks", "events", "goals", "habits"] as const;
+export type SearchType = (typeof SEARCH_TYPES)[number];
+
+export type SearchAllResult = {
+  q: string;
+  counts: Record<SearchType, number>;
+  notes: Note[];
+  tasks: Todo[];
+  events: CalendarEvent[];
+  goals: { id: string; title: string; description: string | null; status: string; target_date: string | null }[];
+  habits: { id: string; title: string; archived: boolean }[];
+};

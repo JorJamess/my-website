@@ -217,6 +217,33 @@ export const tools: ToolDef[] = [
     },
   }),
   define({
+    name: "search_all",
+    title: "ค้นหาทุกอย่าง",
+    description:
+      "ค้นข้ามทุกโมดูลในครั้งเดียว: notes, tasks, events, goals, habits ด้วยคำค้น (กรองด้วยชนิด ช่วงวันที่ สถานะ โฟลเดอร์/แท็กของโน้ตได้). folder หรือ tag จะจำกัดผลเฉพาะบันทึก; status ไม่รวมบันทึก",
+    schema: z.object({
+      query: z.string().min(1).describe("คำค้น"),
+      types: z.array(z.enum(["notes", "tasks", "events", "goals", "habits"])).optional().describe("จำกัดเฉพาะชนิดเหล่านี้"),
+      from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("วันที่เริ่ม YYYY-MM-DD"),
+      to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("วันที่สิ้นสุด YYYY-MM-DD"),
+      status: z.enum(["open", "done"]).optional(),
+      folder: z.string().optional(),
+      tag: z.string().optional(),
+    }),
+    annotations: { readOnlyHint: true },
+    run: async ({ query, types, from, to, status, folder, tag }, tz) => {
+      const r = await repo.searchAll({ q: query, types, from, to, status, folder, tag, limit: 20 });
+      return {
+        counts: r.counts,
+        notes: r.notes.map((n) => fmtNote(n, false)),
+        tasks: r.tasks.map((t) => ({ id: t.id, title: t.title, done: t.done, due_date: t.due_date })),
+        events: r.events.map((e) => fmtEvent(e, tz)),
+        goals: r.goals,
+        habits: r.habits,
+      };
+    },
+  }),
+  define({
     name: "create_event",
     title: "ลงงานใหม่",
     description:

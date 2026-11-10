@@ -2,7 +2,7 @@
 
 import type { Analytics } from "@/modules/analytics/repo";
 import type { CalendarItems } from "@/modules/calendar/repo";
-import type { CalendarEvent, Category, EventColor, GoalDetail, GoalOverview, HabitOverview, Note, NoteDetail, NoteFolder, Summary, Todo } from "@/lib/types";
+import type { CalendarEvent, Category, EventColor, GoalDetail, GoalOverview, HabitOverview, Note, NoteDetail, NoteFolder, SearchAllResult, Summary, Todo } from "@/lib/types";
 import type { MoneyCalendar, MoneySummary, MoneyTransaction } from "@/lib/money-types";
 import type { EventCreateInput, EventUpdateInput, NoteCreateInput, NoteUpdateInput, NoteLinkInput, TodoCreateInput, TodoUpdateInput, HabitCreateInput, HabitUpdateInput, CheckinInput, GoalCreateInput, GoalUpdateInput, MilestoneCreateInput, MilestoneUpdateInput, GoalLinkInput } from "@/lib/schemas";
 
@@ -81,6 +81,13 @@ export const api = {
       habits: { id: string; title: string; archived: boolean }[];
       goals: { id: string; title: string; status: string }[];
     }>(`/api/search?q=${encodeURIComponent(q)}`),
+
+  searchAll: (f: { q: string; types?: string[]; from?: string; to?: string; status?: string; folder?: string; tag?: string }) => {
+    const p = new URLSearchParams({ q: f.q });
+    if (f.types?.length) p.set("types", f.types.join(","));
+    for (const k of ["from", "to", "status", "folder", "tag"] as const) if (f[k]) p.set(k, f[k]!);
+    return request<SearchAllResult>(`/api/search/all?${p}`);
+  },
 
   habits: (includeArchived = false) =>
     request<{ habits: HabitOverview[] }>(`/api/habits${includeArchived ? "?archived=1" : ""}`).then((r) => r.habits),

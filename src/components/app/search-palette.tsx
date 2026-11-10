@@ -179,6 +179,22 @@ export function SearchPalette({ open, onOpenChange }: { open: boolean; onOpenCha
               ))
             )}
           </div>
+          {q.trim() && (
+            <button
+              type="button"
+              onClick={() => {
+                const term = q.trim();
+                close();
+                // a full load so the search page reads the query from the address
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+                window.location.href = `/app/search?q=${encodeURIComponent(term)}`;
+              }}
+              className="flex w-full items-center justify-between border-t px-4 py-2.5 text-left text-[13px] text-muted-foreground hover:text-foreground"
+            >
+              <span>See all results with filters</span>
+              <span aria-hidden>→</span>
+            </button>
+          )}
         </DialogContent>
       </Dialog>
       <EventDialog open={!!event} event={event} onOpenChange={(o) => !o && setEvent(null)} />
