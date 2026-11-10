@@ -53,6 +53,8 @@
 <link rel="modulepreload" href="/assets/moments/word-highlight/moment.js">
 <!-- page CSS: inside visuals only, and one --p-h per card group -->
 <style>
+  /* services picture: keep the screenshot's own shape so the app is never cropped at the sides */
+  #services .frame--fill { height: auto; flex: 0 0 auto; align-self: start; aspect-ratio: 1256 / 1082; min-height: 0; }
   #projects .panel { --p-h: 340px; }
   #projects .frame__img { object-position: 50% 0%; }
   /* the hero: one serif accent with an orange underline, the screen on an orange block, today's list floating */
@@ -235,7 +237,7 @@
             </ul>
           </div>
           <div class="frame frame--photo frame--fill span-6 start-7">
-            <img class="frame__img" src="/portfolio/img/jameswebpupu-notes.webp" alt="The notes page of jameswebpupu with a list of midterm topics open" loading="lazy" width="1256" height="942" data-source="client" data-subject="jameswebpupu notes">
+            <img class="frame__img" src="/portfolio/img/jameswebpupu-notes.webp" alt="The notes page of jameswebpupu with a list of midterm topics open" loading="lazy" width="1256" height="1082" data-source="client" data-subject="jameswebpupu notes">
           </div>
         </div>
     </div>
