@@ -1,18 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Plus } from "lucide-react";
-import { api } from "@/lib/client/api";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { Columns3, List, Plus } from "lucide-react";
+import { api, notifyChanged } from "@/lib/client/api";
 import { useData } from "@/lib/client/use-data";
-import type { Todo } from "@/lib/types";
+import type { Todo, TodoStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Pupu } from "./pupu";
 import { SelectField } from "./select-field";
+import { TodoBoard } from "./todo-board";
 import { TodoDialog } from "./todo-dialog";
 import { AddTodo, TodoItem } from "./todo-list";
 
 type View = "open" | "doing" | "done" | "all";
+type Layout = "list" | "board";
 type Sort = "smart" | "due" | "priority" | "newest";
 
 const VIEWS: { id: View; label: string }[] = [
@@ -37,12 +40,29 @@ export function TodosView() {
   const [minPriority, setMinPriority] = useState(0);
   const [category, setCategory] = useState("");
   const [sort, setSort] = useState<Sort>("smart");
+  const [layout, setLayout] = useState<Layout>("list");
+  const [moved, setMoved] = useState<Map<string, TodoStatus>>(new Map()); // optimistic moves until the server answers
+
+  // remember the layout on this device (storage can be blocked, so it is optional)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("todos-layout");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (saved === "board" || saved === "list") setLayout(saved);
+    } catch {}
+  }, []);
+  const chooseLayout = (l: Layout) => {
+    setLayout(l);
+    try {
+      localStorage.setItem("todos-layout", l);
+    } catch {}
+  };
   const [dialog, setDialog] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
 
   const todos = data?.todos;
   const categories = data?.categories ?? [];
 
-  const { tops, subsOf, counts } = useMemo(() => {
+  const { tops, boardTops, subsOf, counts } = useMemo(() => {
     const all = todos ?? [];
     const top = all.filter((t) => !t.parent_id);
     const subs = new Map<string, Todo[]>();
@@ -51,18 +71,36 @@ export function TodosView() {
       t.priority >= minPriority &&
       (!category || t.category?.name === category) &&
       (view === "all" || (view === "open" ? !t.done : view === "doing" ? t.status === "doing" : t.done));
+    const matchCard = (t: Todo) => t.priority >= minPriority && (!category || t.category?.name === category);
     return {
+      boardTops: sortTodos(
+        top.filter(matchCard).map((t) => (moved.has(t.id) ? { ...t, status: moved.get(t.id)!, done: moved.get(t.id) === "done" } : t)),
+        sort,
+      ),
       tops: sortTodos(top.filter(match), sort),
       subsOf: subs,
       counts: { open: top.filter((t) => !t.done).length, doing: top.filter((t) => t.status === "doing").length, done: top.filter((t) => t.done).length },
     };
-  }, [todos, view, minPriority, category, sort]);
+  }, [todos, view, minPriority, category, sort, moved]);
+
+  async function move(t: Todo, to: TodoStatus) {
+    setMoved((m) => new Map(m).set(t.id, to));
+    try {
+      await api.updateTodo(t.id, { status: to });
+      notifyChanged();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't move the task");
+    } finally {
+      // the reload that follows notifyChanged brings the real status; drop the optimistic one either way
+      setTimeout(() => setMoved((m) => (m.delete(t.id), new Map(m))), 600);
+    }
+  }
 
   const editing = dialog.id ? (todos?.find((t) => t.id === dialog.id) ?? null) : null;
   const filtered = view !== "open" || minPriority > 0 || !!category;
 
   return (
-    <div className="mx-auto max-w-[760px]">
+    <div className={cn("mx-auto", layout === "board" ? "max-w-[1040px]" : "max-w-[760px]")}>
       <header className="flex items-end gap-4 border-b pb-6">
         <div>
           <h1 className="text-[28px] font-semibold tracking-tight">To do</h1>
@@ -80,6 +118,28 @@ export function TodosView() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2 pb-3">
+        <div className="flex rounded-lg bg-muted p-0.5" role="group" aria-label="Layout">
+          {(
+            [
+              { id: "list", label: "List", icon: List },
+              { id: "board", label: "Board", icon: Columns3 },
+            ] as const
+          ).map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              aria-pressed={layout === id}
+              onClick={() => chooseLayout(id)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-[13.5px] transition-colors",
+                layout === id ? "bg-card font-medium shadow-sm" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Icon className="size-3.5" />
+              {label}
+            </button>
+          ))}
+        </div>
+        {layout === "list" && (
         <div className="flex rounded-lg bg-muted p-0.5" role="tablist" aria-label="Show">
           {VIEWS.map((v) => (
             <button
@@ -97,6 +157,7 @@ export function TodosView() {
             </button>
           ))}
         </div>
+        )}
         <SelectField aria-label="Priority at least" value={minPriority} onChange={(e) => setMinPriority(Number(e.target.value))}>
           <option value={0}>Any priority</option>
           <option value={3}>High only</option>
@@ -129,6 +190,8 @@ export function TodosView() {
             <div key={i} className="h-10 animate-pulse rounded-lg bg-muted" />
           ))}
         </div>
+      ) : layout === "board" ? (
+        <TodoBoard todos={boardTops} subsOf={subsOf} onOpen={(x) => setDialog({ open: true, id: x.id })} onMove={move} />
       ) : tops.length ? (
         <ul className="border-b">
           {tops.map((t) => (
