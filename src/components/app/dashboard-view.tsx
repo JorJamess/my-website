@@ -2,19 +2,20 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Loader2, MapPin, Pin, Plus, Repeat } from "lucide-react";
+import { CalendarDays, ChevronDown, ListChecks, Loader2, MapPin, Pin, Plus, Repeat, Sprout } from "lucide-react";
 import { toast } from "sonner";
 import { api, notifyChanged } from "@/lib/client/api";
 import { useData } from "@/lib/client/use-data";
 import { COLOR_HEX } from "@/lib/colors";
 import { addDaysKey, eventDayRange, eventTimeLabel, formatDay, localDateKey, timeOf } from "@/lib/time";
-import type { CalendarEvent } from "@/lib/types";
+import { formatBaht } from "@/lib/money-types";
+import type { CalendarEvent, Summary, Todo } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { EventDialog } from "./event-dialog";
-import { AddTodo, TodoItem } from "./todo-list";
+import { TodoItem, dueLabel } from "./todo-list";
 import { GoalsToday } from "./goals-today";
 import { HabitsToday } from "./habits-today";
 import { MessagesCard } from "./messages-card";
@@ -33,12 +34,18 @@ function greeting() {
   return "Good evening, James.";
 }
 
-function summaryLine(c: { thisWeek: number; doneThisWeek: number }, overdue: number) {
-  const n = (k: number, w: string) => `${k} ${w}${k === 1 ? "" : "s"}`;
-  let line = `This week you have ${n(c.thisWeek, "event")}`;
-  if (c.doneThisWeek) line += `, ${c.doneThisWeek} done`;
-  if (overdue) line += `, and ${n(overdue, "overdue event")} from before`;
-  return `${line}.`;
+/** Today's progress from raw counts: events that can be ticked, habits due today, and tasks due today. */
+function todayProgress(data: Summary, today: string) {
+  const events = data.todayEvents.filter((e) => !e.repeat_days);
+  const dueTasks = data.todosFocus.filter((t) => t.due_date === today);
+  const parts = {
+    events: { done: events.filter((e) => e.done).length, total: events.length },
+    habits: { done: data.habitsToday.filter((h) => h.done).length, total: data.habitsToday.length },
+    tasks: { done: dueTasks.filter((t) => t.done).length, total: dueTasks.length },
+  };
+  const done = parts.events.done + parts.habits.done + parts.tasks.done;
+  const total = parts.events.total + parts.habits.total + parts.tasks.total;
+  return { parts, done, total };
 }
 
 export function DashboardView() {
@@ -46,11 +53,13 @@ export function DashboardView() {
   const [dialog, setDialog] = useState<{ open: boolean; event: CalendarEvent | null }>({ open: false, event: null });
   const openEvent = (event: CalendarEvent | null) => setDialog({ open: true, event });
   const today = data?.today ?? localDateKey();
-  const allDone = !!data && data.todayEvents.length > 0 && data.todayEvents.every((e) => e.done) && data.overdue.length === 0;
+  const progress = data ? todayProgress(data, today) : null;
+  const attentionCount = data ? data.overdue.length + data.overdueTodos.length : 0;
+  const allDone = !!progress && progress.total > 0 && progress.done === progress.total && attentionCount === 0;
 
   return (
     <div>
-      <header className="flex flex-wrap items-end gap-x-6 gap-y-4 border-b pb-7">
+      <header className="flex flex-wrap items-end gap-x-6 gap-y-4 pb-5">
         <p className="motion-rise text-[72px] leading-[0.85] font-semibold tracking-[-0.05em] text-foreground tabular-nums md:text-[96px]">
           {today.slice(8)}
         </p>
@@ -63,40 +72,72 @@ export function DashboardView() {
         </Button>
       </header>
 
-      <div className="group/pupu flex items-center gap-3 pt-4 pb-8">
+      {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
+
+      <section className="group/pupu flex items-center gap-4 rounded-lg border bg-card px-4 py-3.5" aria-label="Today's progress">
         <Pupu
-          size={44}
+          size={48}
           day={Number(today.slice(8))}
           pose={allDone ? "cheer" : "happy"}
           className="motion-pop"
           title={allDone ? "Pupu is cheering: everything today is done" : "Pupu"}
         />
-        <p className="text-[15px] text-muted-foreground">
-          <span className="font-medium text-foreground">{allDone ? "All done for today. Nice work!" : greeting()}</span>{" "}
-          {data ? summaryLine(data.counts, data.overdue.length) : ""}
-        </p>
-      </div>
-      {error && <p className="-mt-4 mb-6 text-sm text-destructive">{error}</p>}
+        <div className="min-w-0 flex-1">
+          {progress && progress.total > 0 ? (
+            <>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+                <p className="text-[16px] font-medium">{allDone ? "All done for today. Nice work!" : `Today so far: ${progress.done} of ${progress.total} done`}</p>
+                <p className="hidden text-[13px] text-muted-foreground sm:block">{greeting()}</p>
+              </div>
+              <div className="my-2 h-1.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${progress.done} of ${progress.total} done`}>
+                <div className="h-full rounded-full bg-foreground transition-[width] duration-500" style={{ width: `${(progress.done / progress.total) * 100}%` }} />
+              </div>
+              <p className="flex flex-wrap gap-x-4 text-[12.5px] text-muted-foreground tabular-nums">
+                {(
+                  [
+                    { icon: CalendarDays, part: progress.parts.events, label: "events" },
+                    { icon: Sprout, part: progress.parts.habits, label: "habits" },
+                    { icon: ListChecks, part: progress.parts.tasks, label: "tasks due today" },
+                  ] as const
+                )
+                  .filter((x) => x.part.total > 0)
+                  .map(({ icon: Icon, part, label }) => (
+                    <span key={label} className="inline-flex items-center gap-1.5" title={`${part.done} of ${part.total} ${label}`} aria-label={`${part.done} of ${part.total} ${label}`}>
+                      <Icon className="size-3.5" strokeWidth={1.7} aria-hidden />
+                      <b className="font-medium text-foreground">
+                        {part.done}/{part.total}
+                      </b>
+                    </span>
+                  ))}
+              </p>
+            </>
+          ) : (
+            <p className="text-[15px]">
+              <span className="font-medium">{loading && !data ? greeting() : "Nothing scheduled for today."}</span>{" "}
+              <span className="text-muted-foreground">{loading && !data ? "" : greeting()}</span>
+            </p>
+          )}
+        </div>
+      </section>
 
-      <div className="grid gap-12 lg:grid-cols-[1.35fr_1fr] lg:gap-14">
+      {data && attentionCount > 0 && <NeedsAttention data={data} today={today} onOpenEvent={openEvent} />}
+
+      <div className="mt-9 grid gap-12 lg:grid-cols-[1.35fr_1fr] lg:gap-14">
         <div className="min-w-0">
           <SectionLabel>Today</SectionLabel>
           {loading && !data ? (
             <Skeleton />
-          ) : data && (data.todayEvents.length || data.overdue.length) ? (
+          ) : data && data.todayEvents.length ? (
             <ol className="timeline relative pl-[22px] before:absolute before:top-1.5 before:bottom-1.5 before:left-1 before:w-px before:bg-border">
-              {data.overdue.map((e, i) => (
-                <TimelineItem key={`${e.id}:${e.start_at}`} event={e} onOpen={openEvent} index={i} late />
-              ))}
               {data.todayEvents.map((e, i) => (
-                <TimelineItem key={`${e.id}:${e.start_at}`} event={e} onOpen={openEvent} index={data.overdue.length + i} />
+                <TimelineItem key={`${e.id}:${e.start_at}`} event={e} onOpen={openEvent} index={i} />
               ))}
             </ol>
           ) : (
             <div className="group/pupu flex items-center gap-3 py-2">
               <Pupu size={56} pose="sleepy" />
               <p className="text-[15px] text-muted-foreground">
-                Nothing scheduled today.{" "}
+                No events today.{" "}
                 <button className="font-medium text-brand underline-offset-4 hover:underline" onClick={() => openEvent(null)}>
                   Add an event
                 </button>
@@ -136,35 +177,174 @@ export function DashboardView() {
         </div>
 
         <div className="min-w-0 space-y-8">
-          <MessagesCard />
-          {data?.goalsActive.length ? <GoalsToday goals={data.goalsActive} /> : null}
           {data?.habitsToday.length ? <HabitsToday habits={data.habitsToday} /> : null}
+          {data?.goalsActive.length ? <GoalsToday goals={data.goalsActive} /> : null}
           <div>
             <SectionLabel>
-              To do{data?.counts.todosOpen ? <span className="ml-1.5 tabular-nums">· {data.counts.todosOpen}</span> : null}
+              Tasks <span className="ml-1.5 font-normal">· due today and high priority</span>
               <Link href="/app/todos" className="ml-auto font-normal hover:text-brand">
-                See all
+                See all{data?.counts.todosOpen ? ` (${data.counts.todosOpen})` : ""}
               </Link>
             </SectionLabel>
-            <AddTodo compact />
-            {data?.todos.length ? (
-              <ul className="mt-2">
-                {data.todos.slice(0, 6).map((t) => (
+            {data?.todosFocus.length ? (
+              <ul>
+                {data.todosFocus.map((t) => (
                   <TodoItem key={t.id} todo={t} compact />
                 ))}
               </ul>
             ) : (
-              !loading && <Empty>Nothing waiting. Add a task above.</Empty>
+              !loading && (
+                <Empty>
+                  Nothing due today.{" "}
+                  <Link href="/app/todos" className="font-medium text-brand underline-offset-4 hover:underline">
+                    Open your list
+                  </Link>
+                </Empty>
+              )
             )}
           </div>
-          <div>
-            <SectionLabel>Money this month</SectionLabel>
-            <MoneyCard />
-          </div>
-          <div>
-            <SectionLabel>Quick note</SectionLabel>
-            <QuickNote today={today} />
-          </div>
+        </div>
+      </div>
+
+      <MoreRow today={today} recentNotes={data?.recentNotes ?? []} />
+
+      <EventDialog
+        open={dialog.open}
+        event={dialog.event}
+        defaultDate={today}
+        onOpenChange={(open) => setDialog((d) => ({ ...d, open }))}
+      />
+    </div>
+  );
+}
+
+/** Overdue tasks and events in one calm box, each tickable. Only shown when there is something. */
+function NeedsAttention({ data, today, onOpenEvent }: { data: Summary; today: string; onOpenEvent: (e: CalendarEvent) => void }) {
+  const [all, setAll] = useState(false);
+  type Item = { key: string; node: React.ReactNode };
+  const items: Item[] = [
+    ...data.overdueTodos.map((t: Todo) => ({
+      key: `t${t.id}`,
+      node: (
+        <div className="flex items-center gap-3 py-1.5">
+          <Checkbox
+            checked={t.done}
+            onCheckedChange={async (v) => {
+              try {
+                await api.updateTodo(t.id, { done: v === true });
+                notifyChanged();
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Couldn't update the task");
+              }
+            }}
+            aria-label={`Mark ${t.title} as done`}
+          />
+          <span className="min-w-0 flex-1 truncate text-[14.5px]">{t.title}</span>
+          <span className="shrink-0 text-[12.5px] text-destructive tabular-nums">
+            {t.priority >= 3 ? "High · " : ""}due {dueLabel(t.due_date ?? today, today).toLowerCase()}
+          </span>
+        </div>
+      ),
+    })),
+    ...data.overdue.map((e) => ({
+      key: `e${e.id}`,
+      node: (
+        <div className="flex items-center gap-3 py-1.5">
+          <Checkbox
+            checked={e.done}
+            onCheckedChange={async (v) => {
+              try {
+                await api.updateEvent(e.id, { done: v === true });
+                notifyChanged();
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Couldn't update the event");
+              }
+            }}
+            aria-label={`Mark ${e.title} as done`}
+          />
+          <button type="button" onClick={() => onOpenEvent(e)} className="min-w-0 flex-1 truncate text-left text-[14.5px] hover:underline">
+            {e.title}
+          </button>
+          <span className="shrink-0 text-[12.5px] text-destructive tabular-nums">event, {formatDay(eventDayRange(e)[0], { month: "short", day: "numeric" })}</span>
+        </div>
+      ),
+    })),
+  ];
+  const shown = all ? items : items.slice(0, 3);
+  return (
+    <section className="mt-3 rounded-lg border border-destructive/25 bg-destructive/5 px-4 py-3" aria-label="Needs attention">
+      <h2 className="mb-1 text-[13.5px] font-medium text-destructive">Needs attention · {items.length}</h2>
+      <ul>
+        {shown.map((i) => (
+          <li key={i.key}>{i.node}</li>
+        ))}
+      </ul>
+      {items.length > 3 && (
+        <button type="button" onClick={() => setAll((v) => !v)} className="mt-1 text-[12.5px] text-muted-foreground hover:text-foreground">
+          {all ? "Show fewer" : `Show ${items.length - 3} more`}
+        </button>
+      )}
+    </section>
+  );
+}
+
+type MoreKey = "money" | "messages" | "note";
+
+/** Money, messages and the quick note, folded into three small cards that open on click. */
+function MoreRow({ today, recentNotes }: { today: string; recentNotes: Summary["recentNotes"] }) {
+  const [open, setOpen] = useState<MoreKey | null>(null);
+  const money = useData(() => api.moneySummary(), []);
+  const messages = useData(() => api.messages().catch(() => null), []);
+  const unread = messages.data?.unread ?? 0;
+  const hasMessages = (messages.data?.messages.length ?? 0) > 0;
+
+  const tiles: { key: MoreKey; label: string; value: string; muted?: boolean }[] = [
+    {
+      key: "money",
+      label: "Money this month",
+      value: money.error ? "Unavailable" : money.data ? `${formatBaht(money.data.net)} left` : "…",
+      muted: !!money.error,
+    },
+    { key: "messages", label: "Messages", value: !hasMessages ? "None yet" : unread ? `${unread} new` : "All read", muted: !hasMessages },
+    { key: "note", label: "Quick note", value: "Write something…", muted: true },
+  ];
+
+  return (
+    <section className="mt-12 border-t pt-6" aria-label="More">
+      <div className="grid grid-cols-3 gap-2.5">
+        {tiles.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            aria-expanded={open === t.key}
+            onClick={() => setOpen((o) => (o === t.key ? null : t.key))}
+            className={cn(
+              "rounded-lg border bg-card px-3 py-2.5 text-left transition-colors hover:border-input",
+              open === t.key && "border-foreground/40",
+            )}
+          >
+            <span className="flex items-center justify-between text-[11.5px] text-muted-foreground">
+              {t.label}
+              <ChevronDown className={cn("size-3.5 transition-transform", open === t.key && "rotate-180")} />
+            </span>
+            <span className={cn("mt-0.5 block truncate text-[15px] font-medium", t.muted && "font-normal text-muted-foreground")}>{t.value}</span>
+          </button>
+        ))}
+      </div>
+
+      {open === "money" && (
+        <div className="motion-fade mt-4">
+          <MoneyCard />
+        </div>
+      )}
+      {open === "messages" && (
+        <div className="motion-fade mt-4">
+          {hasMessages ? <MessagesCard /> : <Empty>No messages yet. They show up here when someone uses the contact form on your portfolio.</Empty>}
+        </div>
+      )}
+      {open === "note" && (
+        <div className="motion-fade mt-4 grid gap-8 md:grid-cols-2">
+          <QuickNote today={today} />
           <div>
             <SectionLabel>
               Recent notes
@@ -172,9 +352,9 @@ export function DashboardView() {
                 See all
               </Link>
             </SectionLabel>
-            {data?.recentNotes.length ? (
+            {recentNotes.length ? (
               <ul>
-                {data.recentNotes.map((n) => (
+                {recentNotes.map((n) => (
                   <li key={n.id} className="border-t">
                     <Link href={`/app/notes?id=${n.id}`} className="block py-2.5 transition-colors hover:bg-muted/40">
                       <span className="flex items-center gap-1.5 text-[15px]">
@@ -187,19 +367,12 @@ export function DashboardView() {
                 ))}
               </ul>
             ) : (
-              <Empty>No notes yet. Write one in the quick note above.</Empty>
+              <Empty>No notes yet. Write one in the quick note.</Empty>
             )}
           </div>
         </div>
-      </div>
-
-      <EventDialog
-        open={dialog.open}
-        event={dialog.event}
-        defaultDate={today}
-        onOpenChange={(open) => setDialog((d) => ({ ...d, open }))}
-      />
-    </div>
+      )}
+    </section>
   );
 }
 

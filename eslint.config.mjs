@@ -15,6 +15,7 @@ const eslintConfig = defineConfig([
     "cloudflare-env.d.ts",
     // generated or third-party files
     ".open-next/**",
+    ".wrangler/**",
     "public/**",
     "docs/**",
     "shots/**",

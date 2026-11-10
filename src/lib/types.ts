@@ -61,6 +61,10 @@ export type Summary = {
   upcoming: CalendarEvent[];
   overdue: CalendarEvent[];
   todos: Todo[];
+  /** open top-level tasks whose due date has passed */
+  overdueTodos: Todo[];
+  /** tasks due today (done or not) plus open high-priority tasks that aren't overdue */
+  todosFocus: Todo[];
   habitsToday: HabitToday[];
   goalsActive: GoalBrief[];
   recentNotes: Note[];

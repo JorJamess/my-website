@@ -28,7 +28,7 @@ export async function getSummary(days = 7): Promise<Summary> {
   const monthStart = parseLocal(monthStartKey, tz).toISOString();
   const monthEnd = parseLocal(nextMonthKey, tz).toISOString();
 
-  const [monthEvents, upRes, overdueRes, notesRes, todosRes, counts, habitsToday, goalsActive] = await Promise.all([
+  const [monthEvents, upRes, overdueRes, notesRes, todosRes, overdueTodosRes, focusRes, counts, habitsToday, goalsActive] = await Promise.all([
     fetchEvents(db, tz, monthStart < weekStart ? monthStart : weekStart, monthEnd > weekEnd ? monthEnd : weekEnd),
     fetchEvents(db, tz, tomorrowStart, upcomingEnd),
     db
@@ -43,6 +43,21 @@ export async function getSummary(days = 7): Promise<Summary> {
         `SELECT t.*, c.name AS cat_name, c.color AS cat_color FROM todos t LEFT JOIN categories c ON c.id = t.category_id
          WHERE t.done = 0 AND t.parent_id IS NULL ORDER BY t.priority DESC, t.due_date IS NULL, t.due_date ASC, t.created_at DESC LIMIT 30`,
       )
+      .all<TodoRow>(),
+    db
+      .prepare(
+        `SELECT t.*, c.name AS cat_name, c.color AS cat_color FROM todos t LEFT JOIN categories c ON c.id = t.category_id
+         WHERE t.done = 0 AND t.parent_id IS NULL AND t.due_date < ?1 ORDER BY t.due_date ASC, t.priority DESC LIMIT 10`,
+      )
+      .bind(today)
+      .all<TodoRow>(),
+    db
+      .prepare(
+        `SELECT t.*, c.name AS cat_name, c.color AS cat_color FROM todos t LEFT JOIN categories c ON c.id = t.category_id
+         WHERE t.parent_id IS NULL AND (t.due_date = ?1 OR (t.done = 0 AND t.priority >= 3 AND (t.due_date IS NULL OR t.due_date >= ?1)))
+         ORDER BY t.done ASC, t.priority DESC, t.due_date IS NULL, t.due_date ASC LIMIT 20`,
+      )
+      .bind(today)
       .all<TodoRow>(),
     db
       .prepare(`SELECT (SELECT COUNT(*) FROM notes) AS notes, (SELECT COUNT(*) FROM todos WHERE done = 0 AND parent_id IS NULL) AS todosOpen`)
@@ -66,6 +81,8 @@ export async function getSummary(days = 7): Promise<Summary> {
     overdue: overdueRes.results.map(toEvent),
     recentNotes: notesRes.results.map(toNote),
     todos: todosRes.results.map(toTodo),
+    overdueTodos: overdueTodosRes.results.map(toTodo),
+    todosFocus: focusRes.results.map(toTodo),
     habitsToday,
     goalsActive,
     counts: {

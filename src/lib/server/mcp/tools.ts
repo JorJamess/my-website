@@ -170,6 +170,8 @@ export const tools: ToolDef[] = [
         upcoming: s.upcoming.map((e) => fmtEvent(e, tz)),
         overdue_not_done: s.overdue.map((e) => fmtEvent(e, tz)),
         open_todos: s.todos.map(fmtTodo),
+        overdue_todos: s.overdueTodos.map(fmtTodo),
+        todos_due_today_or_high_priority: s.todosFocus.map(fmtTodo),
         habits_today: s.habitsToday.map(fmtHabitToday),
         active_goals: s.goalsActive.map((g) => ({ id: g.id, title: g.title, percent: g.percent === null ? null : Math.round(g.percent * 100), days_left: g.days_left, overdue: g.overdue })),
         recent_notes: s.recentNotes.map((n) => fmtNote(n, false)),

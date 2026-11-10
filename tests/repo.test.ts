@@ -214,3 +214,26 @@ describe("habits", () => {
     expect(s.habitsToday.map((h) => h.title)).toEqual(["Read"]);
   });
 });
+
+describe("summary for the Today page", () => {
+  it("separates overdue tasks from today's focus tasks", async () => {
+    const today = localDateKey();
+    await repo.createTodo({ title: "overdue", due_date: addDaysKey(today, -1) });
+    await repo.createTodo({ title: "due today", due_date: today });
+    const doneToday = await repo.createTodo({ title: "done today", due_date: today });
+    await repo.updateTodo(doneToday.id, { done: true });
+    await repo.createTodo({ title: "high no date", priority: "high" });
+    await repo.createTodo({ title: "high overdue", priority: "high", due_date: addDaysKey(today, -2) });
+    await repo.createTodo({ title: "low someday" });
+    await repo.createTodo({ title: "later", due_date: addDaysKey(today, 5) });
+    const sub = await repo.createTodo({ title: "parent" });
+    await repo.createTodo({ title: "sub overdue", parent_id: sub.id, due_date: addDaysKey(today, -1) });
+
+    const s = await repo.getSummary(7);
+    expect(s.overdueTodos.map((t) => t.title).sort()).toEqual(["high overdue", "overdue"]);
+    expect(s.todosFocus.map((t) => t.title)).toEqual(["high no date", "due today", "done today"]);
+    // overdue tasks are not repeated in the focus list, and subtasks never appear
+    expect(s.todosFocus.some((t) => t.title === "high overdue")).toBe(false);
+    expect([...s.overdueTodos, ...s.todosFocus].some((t) => t.parent_id)).toBe(false);
+  });
+});
