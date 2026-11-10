@@ -10,6 +10,7 @@ import { localDateKey } from "@/lib/time";
 import { EVENT_COLORS, type EventColor, type Habit, type HabitScheduleType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { KindHint } from "./kind-hint";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -134,6 +135,7 @@ function HabitForm({ habit, onClose }: { habit: Habit | null; onClose: () => voi
         <DialogTitle>{habit ? "Edit habit" : "New habit"}</DialogTitle>
         <DialogDescription>Streaks only count the days a habit is scheduled, so days off never break one.</DialogDescription>
       </DialogHeader>
+      {!habit && <KindHint current="habit" />}
 
       <div className="space-y-2">
         <Label htmlFor="h-title">Name</Label>

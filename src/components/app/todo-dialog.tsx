@@ -8,6 +8,7 @@ import { TODO_PRIORITIES, type Category, type Todo, type TodoStatus } from "@/li
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { KindHint } from "./kind-hint";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -144,6 +145,7 @@ function TodoForm({ todo, subtasks, categories, onClose }: { todo: Todo | null; 
         <DialogTitle>{todo ? (isSub ? "Edit subtask" : "Edit task") : "New task"}</DialogTitle>
         <DialogDescription>Tasks have no fixed time. Add a due date if there&rsquo;s a deadline.</DialogDescription>
       </DialogHeader>
+      {!todo && <KindHint current="task" />}
 
       <div className="space-y-2">
         <Label htmlFor="t-title">Title</Label>

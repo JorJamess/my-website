@@ -9,6 +9,7 @@ import { COLOR_CLASSES, COLOR_LABELS } from "@/lib/colors";
 import { EVENT_COLORS, GOAL_STATUSES, TODO_PRIORITIES, type Category, type EventColor, type GoalHorizon, type GoalOverview, type GoalStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { KindHint } from "./kind-hint";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -119,6 +120,7 @@ function GoalForm({ goal, categories, onClose }: { goal: GoalOverview | null; ca
         <DialogTitle>{goal ? "Edit goal" : "New goal"}</DialogTitle>
         <DialogDescription>Progress comes from milestones and the tasks you link, so add those next.</DialogDescription>
       </DialogHeader>
+      {!goal && <KindHint current="goal" />}
 
       <div className="space-y-2">
         <Label htmlFor="g-title">Goal</Label>
