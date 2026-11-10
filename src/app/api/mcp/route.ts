@@ -1,11 +1,12 @@
-import { checkMcpToken } from "@/lib/server/auth";
-import { handleMcpPost, methodNotAllowed, unauthorized } from "@/lib/server/mcp/handler";
+import { handleMcpPost, methodNotAllowed } from "@/lib/server/mcp/handler";
+import { mcpGate } from "@/lib/server/mcp/guard";
 
 // ใช้กับ client ที่ส่ง header ได้: Authorization: Bearer <MCP_TOKEN>
 export async function POST(req: Request) {
   const auth = req.headers.get("authorization") ?? "";
   const token = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : null;
-  if (!(await checkMcpToken(token))) return unauthorized();
+  const denied = await mcpGate(req, token);
+  if (denied) return denied;
   return handleMcpPost(req);
 }
 

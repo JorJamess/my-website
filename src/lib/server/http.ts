@@ -4,12 +4,14 @@ import { ZodError } from "zod";
 import { isAuthed } from "./auth";
 import { InputError } from "./repo";
 import { MoneyUnavailableError } from "./money";
+import { isSameOrigin } from "./origin";
 
 type Handler<C> = (req: Request, ctx: C) => Promise<Response>;
 
 /** ห่อ route handler: ตรวจ login + แปลง error เป็น JSON */
 export function api<C>(handler: Handler<C>): Handler<C> {
   return async (req, ctx) => {
+    if (!isSameOrigin(req)) return NextResponse.json({ error: "forbidden_origin" }, { status: 403 });
     if (!(await isAuthed())) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     try {
       return await handler(req, ctx);

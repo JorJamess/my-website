@@ -1,17 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, Loader2, Share, Smartphone } from "lucide-react";
+import { Download, History, Loader2, Share, Smartphone } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "@/lib/client/api";
+import { api, notifyChanged, UNAUTHORIZED_EVENT } from "@/lib/client/api";
 import { useData } from "@/lib/client/use-data";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Pupu, PUPU_POSE_LABELS, PUPU_POSES } from "./pupu";
 
 type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString("en-US", { timeZone: "Asia/Bangkok", dateStyle: "medium", timeStyle: "short" });
+const TABLE_LABELS: Record<string, string> = { events: "events", notes: "notes", todos: "to-dos" };
+const REASONS: Record<string, string> = { weekly: "Weekly", manual: "Manual", "pre-restore": "Before a restore" };
+const countsText = (b: { counts?: Record<string, number>; events?: number; notes?: number }) => {
+  const c = b.counts ?? { events: b.events ?? 0, notes: b.notes ?? 0 };
+  return Object.entries(c)
+    .map(([t, n]) => `${n} ${TABLE_LABELS[t] ?? t}`)
+    .join(", ");
+};
 const size = (bytes: number) => (bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`);
 
 export function SettingsView() {
@@ -20,6 +29,7 @@ export function SettingsView() {
       <h1 className="text-[26px] font-medium tracking-tight">Settings</h1>
       <Visits />
       <Backups />
+      <Security />
       <InstallApp />
       <MeetPupu />
     </div>
@@ -39,6 +49,7 @@ function Section({ title, description, children }: { title: string; description:
 function Backups() {
   const { data, loading, error, reload } = useData(() => api.backups(), []);
   const [saving, setSaving] = useState(false);
+  const [restoring, setRestoring] = useState<string | null>(null);
 
   async function backupNow() {
     setSaving(true);
@@ -56,7 +67,7 @@ function Backups() {
   return (
     <Section
       title="Backups"
-      description="Your events and notes are backed up every Monday at 03:00 Thailand time. Each backup is kept for 8 weeks."
+      description="Your events, notes and to-dos are backed up every Monday at 03:00 Thailand time. Each backup is kept for 8 weeks."
     >
       <div className="flex flex-wrap gap-2">
         <Button className="rounded-full px-4" onClick={backupNow} disabled={saving}>
@@ -85,9 +96,12 @@ function Backups() {
                 <div className="min-w-0 flex-1">
                   <p>{when(b.created_at)}</p>
                   <p className="text-[13px] text-muted-foreground">
-                    {b.reason === "weekly" ? "Weekly" : "Manual"}, {b.events} events, {b.notes} notes, {size(b.bytes)}
+                    {REASONS[b.reason] ?? b.reason}, {countsText(b)}, {size(b.bytes)}
                   </p>
                 </div>
+                <Button variant="ghost" size="sm" onClick={() => setRestoring(b.key)}>
+                  <History /> Restore
+                </Button>
                 <Button variant="ghost" size="sm" asChild>
                   <a href={`/api/backups/download?key=${encodeURIComponent(b.key)}`} download>
                     <Download /> Download
@@ -100,6 +114,108 @@ function Backups() {
           <p className="text-[14.5px] text-muted-foreground">No saved backups yet. The first weekly one runs next Monday.</p>
         )}
       </div>
+      <RestoreDialog key={restoring ?? "closed"} backupKey={restoring} onClose={() => setRestoring(null)} onDone={reload} />
+    </Section>
+  );
+}
+
+function RestoreDialog({ backupKey, onClose, onDone }: { backupKey: string | null; onClose: () => void; onDone: () => void }) {
+  const [preview, setPreview] = useState<{ table: string; current: number; incoming: number }[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!backupKey) return;
+    let live = true;
+    api
+      .restorePreview(backupKey)
+      .then((p) => live && setPreview(p))
+      .catch((e) => live && setError(e instanceof Error ? e.message : "Couldn't read the backup"));
+    return () => {
+      live = false;
+    };
+  }, [backupKey]);
+
+  async function restore() {
+    if (!backupKey) return;
+    setBusy(true);
+    try {
+      await api.restore(backupKey);
+      toast.success("Backup restored");
+      notifyChanged();
+      onDone();
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't restore the backup");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={!!backupKey} onOpenChange={(o) => !o && !busy && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Restore this backup?</DialogTitle>
+          <DialogDescription>
+            This replaces your current data with the backup. A copy of what you have now is saved first, so you can undo it from this list.
+          </DialogDescription>
+        </DialogHeader>
+        {error ? (
+          <p className="text-sm text-destructive">{error}.</p>
+        ) : !preview ? (
+          <div className="h-16 animate-pulse rounded-lg bg-muted" />
+        ) : (
+          <ul className="space-y-1 text-[14.5px]">
+            {preview.map((p) => (
+              <li key={p.table} className="flex justify-between border-t py-2 first:border-t-0">
+                <span className="capitalize">{TABLE_LABELS[p.table] ?? p.table}</span>
+                <span className="tabular-nums text-muted-foreground">
+                  {p.current} now &rarr; <span className="font-medium text-foreground">{p.incoming}</span> after
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button onClick={restore} disabled={!preview || busy}>
+            {busy && <Loader2 className="animate-spin" />}
+            Restore
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Security() {
+  const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+
+  async function logoutEverywhere() {
+    if (!confirm) return setConfirm(true);
+    setBusy(true);
+    try {
+      await api.logoutEverywhere();
+      window.dispatchEvent(new Event(UNAUTHORIZED_EVENT)); // back to the login screen
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't log out everywhere");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Section
+      title="Security"
+      description="Lost a device or used a shared computer? Log out everywhere to end every session, including this one."
+    >
+      <Button variant="outline" className="rounded-full px-4" onClick={logoutEverywhere} disabled={busy}>
+        {busy && <Loader2 className="animate-spin" />}
+        {confirm ? "Click again to log out everywhere" : "Log out of all devices"}
+      </Button>
     </Section>
   );
 }

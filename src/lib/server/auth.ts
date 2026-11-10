@@ -21,11 +21,30 @@ export function safeEqual(a: string, b: string) {
   return diff === 0;
 }
 
+/** Current session version (starts at 1). Bumping it invalidates every session issued before. */
+export async function getSessionVersion(db: D1Database): Promise<number> {
+  const row = await db.prepare("SELECT value FROM app_settings WHERE key = 'session_version'").first<{ value: string }>();
+  const n = Number(row?.value);
+  return Number.isInteger(n) && n > 0 ? n : 1;
+}
+
+/** "Log out everywhere": every existing session stops working. */
+export async function bumpSessionVersion() {
+  const { DB } = await getEnv();
+  const next = (await getSessionVersion(DB)) + 1;
+  await DB.prepare(
+    "INSERT INTO app_settings (key, value) VALUES ('session_version', ?1) ON CONFLICT(key) DO UPDATE SET value = ?1",
+  )
+    .bind(String(next))
+    .run();
+  return next;
+}
+
 export async function createSessionToken() {
   const env = await getEnv();
   if (!env.SESSION_SECRET) throw new Error("SESSION_SECRET is not set");
   const exp = Date.now() + SESSION_DAYS * 86_400_000;
-  const payload = `admin.${exp}`;
+  const payload = `admin.${exp}.${await getSessionVersion(env.DB)}`;
   return { token: `${payload}.${await hmac(env.SESSION_SECRET, payload)}`, maxAge: SESSION_DAYS * 86_400 };
 }
 
@@ -34,10 +53,11 @@ async function verifySessionToken(token: string | undefined) {
   const env = await getEnv();
   if (!env.SESSION_SECRET) return false;
   const parts = token.split(".");
-  if (parts.length !== 3) return false;
-  const [who, exp, sig] = parts;
-  if (Number(exp) < Date.now()) return false;
-  return safeEqual(sig, await hmac(env.SESSION_SECRET, `${who}.${exp}`));
+  if (parts.length !== 4) return false;
+  const [who, exp, version, sig] = parts;
+  if (!(Number(exp) >= Date.now())) return false;
+  if (!safeEqual(sig, await hmac(env.SESSION_SECRET, `${who}.${exp}.${version}`))) return false;
+  return Number(version) === (await getSessionVersion(env.DB));
 }
 
 export async function isAuthed() {

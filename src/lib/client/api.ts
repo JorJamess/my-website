@@ -43,6 +43,7 @@ export const api = {
   me: () => request<{ authed: boolean }>("/api/auth/me"),
   login: (password: string) => request<{ ok: true }>("/api/auth/login", json("POST", { password })),
   logout: () => request<{ ok: true }>("/api/auth/logout", json("POST")),
+  logoutEverywhere: () => request<{ ok: true }>("/api/auth/logout-all", json("POST")),
 
   summary: () => request<Summary>("/api/summary"),
 
@@ -80,9 +81,16 @@ export const api = {
     request<{ transactions: MoneyTransaction[] }>(`/api/money/transactions?from=${from}&to=${to}`).then((r) => r.transactions),
 
   backups: () =>
-    request<{ backups: { key: string; created_at: string; reason: string; events: number; notes: number; bytes: number }[] }>(
-      "/api/backups",
-    ).then((r) => r.backups),
+    request<{
+      backups: { key: string; created_at: string; reason: string; counts?: Record<string, number>; events?: number; notes?: number; bytes: number }[];
+    }>("/api/backups").then((r) => r.backups),
+  restorePreview: (key: string) =>
+    request<{ preview: { table: string; current: number; incoming: number }[] }>(
+      "/api/backups/restore",
+      json("POST", { key }),
+    ).then((r) => r.preview),
+  restore: (key: string) =>
+    request<{ ok: true; restored: Record<string, number> }>("/api/backups/restore", json("POST", { key, confirm: true })),
   backupNow: () => request<{ backup: { key: string } }>("/api/backups", json("POST")),
 
   messages: () =>

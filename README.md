@@ -16,7 +16,7 @@ A personal site with two parts: a public bilingual portfolio at `/` and `/th`, a
   - Notes: search, pin, Markdown text.
   - Messages from the portfolio's contact form, shown on Today.
   - Money: this month's income and spending, read from a separate expenses app over a read-only API.
-  - Settings: weekly backups (download any of them), a cookie-free visit counter for the portfolio, and install-as-app.
+  - Settings: weekly backups (download or restore any of them), log out of all devices, a cookie-free visit counter for the portfolio, and install-as-app.
 - **MCP server** at `/api/mcp`: an MCP client such as Claude can read the schedule, add or change events, write notes, read contact messages and see visit stats.
 - Light and dark themes, installable as a PWA, English UI.
 
@@ -26,6 +26,14 @@ A personal site with two parts: a public bilingual portfolio at `/` and `/th`, a
 - Cloudflare Workers via [OpenNext](https://opennext.js.org/cloudflare), D1 (SQLite), KV for backups
 - Zod for validation, a small hand-written JSON-RPC handler for MCP (Streamable HTTP, stateless)
 
+## Checks
+
+```bash
+npm run check    # typecheck, lint and tests
+```
+
+The tests run against the real migrations on an in-memory SQLite, so they need no Cloudflare login. CI runs the same checks on every push.
+
 ## Layout
 
 ```
@@ -34,7 +42,9 @@ public/assets/           CSS and JS the portfolio uses
 src/app/app/             the private planner pages (/app, /app/calendar, /app/notes, ...)
 src/app/api/             REST API (login required) and /api/mcp
 src/components/app/      planner UI
-src/lib/server/          D1 access, auth, login lockout, messages, money client, MCP tools
+src/modules/             data access by domain (events, notes, tasks, summary)
+src/lib/server/          auth, login lockout, messages, money client, MCP tools
+tests/                   Vitest tests and the in-memory D1 stand-in
 src/lib/                 shared helpers (time zone, backups, visit counter)
 migrations/              D1 schema
 custom-worker.ts         Worker entry: serves the portfolio, counts visits, runs the weekly backup
@@ -66,7 +76,7 @@ npm run deploy
 
 After that, every push to `main` can build and deploy through Cloudflare Workers Builds
 (build: `npx opennextjs-cloudflare build`, deploy: `npx opennextjs-cloudflare deploy`).
-Run `npm run db:migrate:remote` before pushing a change that adds a migration.
+Order for a change that adds a migration: back up (Settings), `npm run db:migrate:remote`, then push.
 
 ## Connecting an MCP client
 
