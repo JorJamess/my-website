@@ -50,8 +50,9 @@ function seriesStart(event: CalendarEvent): CalendarEvent {
   };
 }
 
-function initialState(occurrence: CalendarEvent | null, defaultDate?: string, defaultTime?: string): FormState {
-  const event = occurrence && seriesStart(occurrence);
+function initialState(occurrence: CalendarEvent | null, defaultDate?: string, defaultTime?: string, justThisOne = false): FormState {
+  // a single occurrence shows its own date and time; the whole series shows when it first starts
+  const event = occurrence && (justThisOne ? occurrence : seriesStart(occurrence));
   if (event) {
     const s = splitLocal(event.start_at);
     const [, lastDay] = eventDayRange(event);
@@ -67,8 +68,8 @@ function initialState(occurrence: CalendarEvent | null, defaultDate?: string, de
       description: event.description ?? "",
       color: event.color,
       done: event.done,
-      repeatDays: event.repeat_days ?? [],
-      repeatUntil: event.repeat_until ?? "",
+      repeatDays: justThisOne ? [] : (event.repeat_days ?? []),
+      repeatUntil: justThisOne ? "" : (event.repeat_until ?? ""),
     };
   }
   const date = defaultDate ?? localDateKey();
@@ -136,7 +137,17 @@ function EventForm({
   onClose: () => void;
 }) {
   const colorNames = useColorNames();
-  const [form, setForm] = useState<FormState>(() => initialState(event, defaultDate, defaultTime));
+  // opening one day of a repeating event: change just that day, or the whole series
+  const isOccurrence = !!event?.repeat_days && !!event.series_start_at;
+  const [scope, setScope] = useState<"one" | "all">(isOccurrence ? "one" : "all");
+  const [form, setForm] = useState<FormState>(() => initialState(event, defaultDate, defaultTime, isOccurrence));
+  const occurrenceDay = event ? splitLocal(event.start_at).date : "";
+  const justThisOne = isOccurrence && scope === "one";
+  const changeScope = (next: "one" | "all") => {
+    setScope(next);
+    setConfirmDelete(false);
+    setForm(initialState(event, defaultDate, defaultTime, next === "one"));
+  };
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -163,9 +174,22 @@ function EventForm({
       const repeat = form.repeatDays.length
         ? { repeat_days: form.repeatDays, repeat_until: form.repeatUntil || null }
         : { repeat_days: null, repeat_until: null };
-      if (event) {
+      if (event && justThisOne) {
+        // this day leaves the series and becomes its own event
+        const created = await api.editOccurrence(event.id, occurrenceDay, {
+          title: payload.title,
+          start: payload.start,
+          end: end ?? undefined,
+          all_day: payload.all_day,
+          location: payload.location ?? undefined,
+          description: payload.description ?? undefined,
+          color: payload.color,
+        });
+        if (form.done) await api.updateEvent(created.id, { done: true });
+        toast.success("Changed just this one");
+      } else if (event) {
         await api.updateEvent(event.id, { ...payload, ...repeat, end, done: form.done });
-        toast.success("Event updated");
+        toast.success(isOccurrence ? "Series updated" : "Event updated");
       } else {
         await api.createEvent({
           ...payload,
@@ -192,8 +216,13 @@ function EventForm({
     if (!confirmDelete) return setConfirmDelete(true);
     setSaving(true);
     try {
-      await api.deleteEvent(event.id);
-      toast.success("Event deleted");
+      if (justThisOne) {
+        await api.skipOccurrence(event.id, occurrenceDay);
+        toast.success("Removed from the series");
+      } else {
+        await api.deleteEvent(event.id);
+        toast.success(isOccurrence ? "Series deleted" : "Event deleted");
+      }
       notifyChanged();
       onClose();
     } catch (err) {
@@ -209,9 +238,39 @@ function EventForm({
             <DialogTitle>{event ? (event.repeat_days ? "Edit repeating event" : "Edit event") : "New event"}</DialogTitle>
             <DialogDescription>
               All times are Thailand time (UTC{TZ_OFFSET}).
-              {event?.repeat_days ? " Changes apply to every repeat." : ""}
+              {isOccurrence
+                ? justThisOne
+                  ? " Only this day changes. The rest of the series stays as it is."
+                  : " Changes apply to every repeat."
+                : event?.repeat_days
+                  ? " Changes apply to every repeat."
+                  : ""}
             </DialogDescription>
           </DialogHeader>
+
+          {isOccurrence && (
+            <div className="flex rounded-lg bg-muted p-0.5" role="group" aria-label="What to change">
+              {(
+                [
+                  { id: "one", label: "This event only" },
+                  { id: "all", label: "All events in the series" },
+                ] as const
+              ).map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  aria-pressed={scope === o.id}
+                  onClick={() => changeScope(o.id)}
+                  className={cn(
+                    "flex-1 rounded-md px-3 py-1.5 text-[13.5px] transition-colors",
+                    scope === o.id ? "bg-card font-medium shadow-sm" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="ev-title">Title</Label>
@@ -304,6 +363,7 @@ function EventForm({
             </div>
           </div>
 
+          {!justThisOne && (
           <div className="space-y-2">
             <Label>Repeat weekly</Label>
             <div className="flex flex-wrap gap-1.5">
@@ -349,8 +409,9 @@ function EventForm({
               </div>
             )}
           </div>
+          )}
 
-          {event && form.repeatDays.length === 0 && (
+          {event && (form.repeatDays.length === 0 || justThisOne) && (
             <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
               <Checkbox checked={form.done} onCheckedChange={(v) => set("done", v === true)} />
               Done
@@ -361,7 +422,7 @@ function EventForm({
             {event ? (
               <Button type="button" variant="destructive" onClick={remove} disabled={saving}>
                 <Trash2 />
-                {confirmDelete ? "Click again to delete" : "Delete"}
+                {confirmDelete ? "Click again to delete" : isOccurrence ? (justThisOne ? "Delete this event" : "Delete series") : "Delete"}
               </Button>
             ) : (
               <span />
@@ -372,7 +433,7 @@ function EventForm({
               </Button>
               <Button type="submit" disabled={saving || !form.title.trim()}>
                 {saving && <Loader2 className="animate-spin" />}
-                Save event
+                {isOccurrence ? (justThisOne ? "Save this event" : "Save series") : "Save event"}
               </Button>
             </div>
           </DialogFooter>

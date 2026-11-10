@@ -40,6 +40,16 @@ describe("repeat day helpers", () => {
   });
 });
 
+describe("expandSeries skip list", () => {
+  it("leaves out the skipped days only", () => {
+    const out = expandSeries(base, ...range("2026-11-09", "2026-11-16"), new Set(["2026-11-11"]));
+    expect(days(out)).toEqual(["2026-11-09", "2026-11-13"]);
+  });
+  it("ignores skip days that aren't occurrences", () => {
+    expect(days(expandSeries(base, ...range("2026-11-09", "2026-11-16"), new Set(["2026-11-10"])))).toEqual(["2026-11-09", "2026-11-11", "2026-11-13"]);
+  });
+});
+
 describe("expandSeries", () => {
   it("returns a non-repeating event unchanged", () => {
     const e = { ...base, repeat_days: null };

@@ -307,6 +307,29 @@ export const tools: ToolDef[] = [
 
 tools.push(
   define({
+    name: "skip_event_occurrence",
+    title: "ข้ามงานซ้ำเฉพาะครั้งเดียว",
+    description:
+      "เอางานซ้ำ (เช่น ยิมทุกจันทร์) ออกเฉพาะวันนั้นวันเดียว โดยที่ครั้งอื่นยังอยู่ ใช้ id ของซีรีส์ (เหมือน id ที่ list_events ให้) และ day=YYYY-MM-DD ของครั้งนั้น. ถ้าต้องการแก้เฉพาะครั้ง ให้ข้ามครั้งนั้นแล้ว create_event ใหม่ด้วยรายละเอียดที่ต้องการ",
+    schema: z.object({ id, day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("วันที่ของครั้งที่จะข้าม") }),
+    annotations: { idempotentHint: true },
+    run: async ({ id, day }) => {
+      await repo.skipOccurrence(id, day);
+      return { skipped: { id, day } };
+    },
+  }),
+  define({
+    name: "restore_event_occurrence",
+    title: "เอาครั้งที่ข้ามกลับมา",
+    description: "ยกเลิกการข้ามงานซ้ำของวันนั้น (เอาครั้งนั้นกลับเข้าซีรีส์)",
+    schema: z.object({ id, day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }),
+    annotations: { idempotentHint: true },
+    run: async ({ id, day }) => {
+      if (!(await repo.restoreOccurrence(id, day))) throw new repo.InputError("ครั้งนั้นไม่ได้ถูกข้ามไว้");
+      return { restored: { id, day } };
+    },
+  }),
+  define({
     name: "get_calendar_items",
     title: "task ที่ครบกำหนดและ milestone ในช่วงวันที่",
     description: "สิ่งที่ปรากฏบนปฏิทินนอกจาก event: task ที่มีกำหนดส่งและ milestone ของเป้าหมายในช่วง from–to (รวมวันปลาย YYYY-MM-DD) ใช้คู่กับ list_events เพื่อวางแผนสัปดาห์",

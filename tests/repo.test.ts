@@ -265,3 +265,50 @@ describe("calendar items and colour names", () => {
     expect((await repo.getColorNames()).green).toBe("Health"); // untouched
   });
 });
+
+describe("one occurrence of a repeating event", () => {
+  const week = ["2026-11-09", "2026-11-16"] as const;
+  const titles = async () => (await repo.listEvents({ from: week[0], to: "2026-11-23" })).map((e) => `${e.title}@${e.start_at.slice(0, 10)}`);
+
+  it("skips one occurrence and keeps the rest, and restoring brings it back", async () => {
+    const e = await repo.createEvent({ title: "Gym", start: "2026-11-09 18:00", repeat_days: [1, 3] });
+    await repo.skipOccurrence(e.id, "2026-11-11");
+    expect(await titles()).not.toContain("Gym@2026-11-11");
+    expect(await titles()).toEqual(expect.arrayContaining(["Gym@2026-11-09", "Gym@2026-11-16", "Gym@2026-11-18"]));
+    await repo.skipOccurrence(e.id, "2026-11-11"); // twice is fine
+    expect(await repo.restoreOccurrence(e.id, "2026-11-11")).toBe(true);
+    expect(await repo.restoreOccurrence(e.id, "2026-11-11")).toBe(false);
+    expect(await titles()).toContain("Gym@2026-11-11");
+  });
+  it("only skips real occurrences of a repeating event", async () => {
+    const e = await repo.createEvent({ title: "Gym", start: "2026-11-09 18:00", repeat_days: [1], repeat_until: "2026-11-30" });
+    const once = await repo.createEvent({ title: "Once", start: "2026-11-10 10:00" });
+    await expect(repo.skipOccurrence(e.id, "2026-11-10")).rejects.toThrow(repo.InputError); // a Tuesday
+    await expect(repo.skipOccurrence(e.id, "2026-11-02")).rejects.toThrow(repo.InputError); // before the start
+    await expect(repo.skipOccurrence(e.id, "2026-12-07")).rejects.toThrow(repo.InputError); // after the end
+    await expect(repo.skipOccurrence(once.id, "2026-11-10")).rejects.toThrow(repo.InputError); // doesn't repeat
+    await expect(repo.skipOccurrence("nope", "2026-11-10")).rejects.toThrow(repo.InputError);
+    await expect(repo.skipOccurrence(e.id, "not a day")).rejects.toThrow(repo.InputError);
+  });
+  it("edit-just-this-one moves the occurrence out into its own event", async () => {
+    const e = await repo.createEvent({ title: "Gym", start: "2026-11-09 18:00", end: "2026-11-09 19:00", repeat_days: [1], color: "orange" });
+    const one = await repo.detachOccurrence(e.id, "2026-11-16", { title: "Gym (late)", start: "2026-11-16 20:00", end: "2026-11-16 21:00", color: "orange" });
+    expect(one.repeat_days).toBeNull();
+    const list = await titles();
+    expect(list).toContain("Gym (late)@2026-11-16");
+    expect(list).not.toContain("Gym@2026-11-16");
+    expect(list).toContain("Gym@2026-11-09");
+  });
+  it("a detached event that tries to repeat is stored as a one-off", async () => {
+    const e = await repo.createEvent({ title: "Gym", start: "2026-11-09 18:00", repeat_days: [1] });
+    const one = await repo.detachOccurrence(e.id, "2026-11-09", { title: "x", start: "2026-11-09 20:00", repeat_days: [1, 2] });
+    expect(one.repeat_days).toBeNull();
+  });
+  it("deleting the series removes its skipped days", async () => {
+    const e = await repo.createEvent({ title: "Gym", start: "2026-11-09 18:00", repeat_days: [1] });
+    await repo.skipOccurrence(e.id, "2026-11-16");
+    await repo.deleteEvent(e.id);
+    const left = await (globalThis as unknown as { __testEnv: { DB: D1Database } }).__testEnv.DB.prepare("SELECT COUNT(*) AS n FROM event_exceptions").first<{ n: number }>();
+    expect(left?.n).toBe(0);
+  });
+});

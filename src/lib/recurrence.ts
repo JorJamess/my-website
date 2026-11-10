@@ -15,9 +15,9 @@ export const serializeRepeatDays = (d: number[] | null | undefined) =>
 
 /**
  * Turn one recurring series into its occurrences that overlap [fromMs, toMs).
- * Every occurrence keeps the series id, so the UI edits the whole series.
+ * Every occurrence keeps the series id. Days in `skip` (local YYYY-MM-DD of an occurrence's start) are left out.
  */
-export function expandSeries(e: CalendarEvent, fromMs: number, toMs: number): CalendarEvent[] {
+export function expandSeries(e: CalendarEvent, fromMs: number, toMs: number, skip?: ReadonlySet<string>): CalendarEvent[] {
   if (!e.repeat_days) return [e];
   const startMs = new Date(e.start_at).getTime();
   const duration = e.end_at ? new Date(e.end_at).getTime() - startMs : 0;
@@ -32,6 +32,7 @@ export function expandSeries(e: CalendarEvent, fromMs: number, toMs: number): Ca
   for (let guard = 0; day <= lastDay && guard < 800; guard++, day = addDaysKey(day, 1)) {
     if (e.repeat_until && day > e.repeat_until) break;
     if (!e.repeat_days.includes(weekdayIndex(day))) continue;
+    if (skip?.has(day)) continue; // this occurrence was removed from the series
     const shiftDays = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${seriesDay}T00:00:00Z`)) / DAY_MS);
     const s = startMs + shiftDays * DAY_MS;
     const en = e.end_at ? s + duration : null;

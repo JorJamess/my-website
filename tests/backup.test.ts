@@ -63,6 +63,17 @@ describe("restore", () => {
     expect(todos[0].important).toBe(true);
   });
 
+  it("round-trips skipped occurrences", async () => {
+    const env = freshEnv();
+    const e = await repo.createEvent({ title: "Gym", start: "2026-11-09 18:00", repeat_days: [1] });
+    await repo.skipOccurrence(e.id, "2026-11-16");
+    const snap = JSON.parse(JSON.stringify(await buildSnapshot(env.DB, "manual")));
+    await repo.restoreOccurrence(e.id, "2026-11-16");
+    await restoreSnapshot(env.DB, parseSnapshot(snap));
+    const list = await repo.listEvents({ from: "2026-11-09", to: "2026-11-23" });
+    expect(list.map((x) => x.start_at.slice(0, 10))).toEqual(["2026-11-09"]); // the 16th stays skipped after the restore
+  });
+
   it("round-trips habits and their check-ins", async () => {
     const env = freshEnv();
     const h = await repo.createHabit({ title: "Gym", schedule_type: "weekdays", weekdays: [1, 3, 5] });

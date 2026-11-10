@@ -56,6 +56,11 @@ export const api = {
   updateEvent: (id: string, input: EventUpdateInput) =>
     request<{ event: CalendarEvent }>(`/api/events/${id}`, json("PATCH", input)).then((r) => r.event),
   deleteEvent: (id: string) => request<{ ok: true }>(`/api/events/${id}`, json("DELETE")),
+  /** take one occurrence of a repeating event out of the series */
+  skipOccurrence: (id: string, day: string) => request<{ ok: true }>(`/api/events/${id}/occurrences`, json("POST", { action: "skip", day })),
+  /** edit just one occurrence: it leaves the series and becomes its own event */
+  editOccurrence: (id: string, day: string, event: EventCreateInput) =>
+    request<{ event: CalendarEvent }>(`/api/events/${id}/occurrences`, json("POST", { action: "edit", day, event })).then((r) => r.event),
 
   todos: (includeDone = false) =>
     request<{ todos: Todo[] }>(`/api/todos${includeDone ? "?done=1" : ""}`).then((r) => r.todos),
