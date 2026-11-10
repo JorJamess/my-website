@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { SelectField } from "./select-field";
 import { PRIORITY_LABEL } from "./todo-list";
 
 const STATUSES: { id: TodoStatus; label: string }[] = [
@@ -187,11 +188,11 @@ function TodoForm({ todo, subtasks, categories, onClose }: { todo: Todo | null; 
                 </Button>
               </div>
             ) : (
-              <select
+              <SelectField
                 id="t-cat"
                 value={f.category}
                 onChange={(e) => (e.target.value === NEW_CATEGORY ? (setNewCategory(true), set("category", "")) : set("category", e.target.value))}
-                className="h-9 w-full rounded-lg border bg-card px-2.5 text-sm"
+                className="w-full"
               >
                 <option value="">None</option>
                 {categories.map((c) => (
@@ -200,7 +201,7 @@ function TodoForm({ todo, subtasks, categories, onClose }: { todo: Todo | null; 
                   </option>
                 ))}
                 <option value={NEW_CATEGORY}>New category…</option>
-              </select>
+              </SelectField>
             )}
           </div>
         )}

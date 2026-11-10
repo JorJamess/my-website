@@ -8,6 +8,7 @@ import type { Todo } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Pupu } from "./pupu";
+import { SelectField } from "./select-field";
 import { TodoDialog } from "./todo-dialog";
 import { AddTodo, TodoItem } from "./todo-list";
 
@@ -20,8 +21,6 @@ const VIEWS: { id: View; label: string }[] = [
   { id: "done", label: "Done" },
   { id: "all", label: "All" },
 ];
-
-const select = "h-9 rounded-lg border bg-card px-2.5 text-[13.5px] text-foreground";
 
 function sortTodos(list: Todo[], sort: Sort): Todo[] {
   if (sort === "smart") return list; // the server already orders by priority, then due date
@@ -98,28 +97,28 @@ export function TodosView() {
             </button>
           ))}
         </div>
-        <select aria-label="Priority at least" value={minPriority} onChange={(e) => setMinPriority(Number(e.target.value))} className={select}>
+        <SelectField aria-label="Priority at least" value={minPriority} onChange={(e) => setMinPriority(Number(e.target.value))}>
           <option value={0}>Any priority</option>
           <option value={3}>High only</option>
           <option value={2}>Medium and up</option>
           <option value={1}>Low and up</option>
-        </select>
+        </SelectField>
         {categories.length > 0 && (
-          <select aria-label="Category" value={category} onChange={(e) => setCategory(e.target.value)} className={select}>
+          <SelectField aria-label="Category" value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="">All categories</option>
             {categories.map((c) => (
               <option key={c.id} value={c.name}>
                 {c.name}
               </option>
             ))}
-          </select>
+          </SelectField>
         )}
-        <select aria-label="Sort by" value={sort} onChange={(e) => setSort(e.target.value as Sort)} className={cn(select, "ml-auto")}>
+        <SelectField aria-label="Sort by" value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="ml-auto">
           <option value="smart">Smart order</option>
           <option value="due">Due date</option>
           <option value="priority">Priority</option>
           <option value="newest">Newest</option>
-        </select>
+        </SelectField>
       </div>
 
       {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
