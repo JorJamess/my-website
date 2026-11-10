@@ -312,3 +312,56 @@ describe("one occurrence of a repeating event", () => {
     expect(left?.n).toBe(0);
   });
 });
+
+describe("notes: folders, tags and links", () => {
+  it("files notes in folders and filters by folder and tag", async () => {
+    const a = await repo.createNote({ title: "Kanji", folder: "Study", tags: ["#Japanese", "japanese", "Exam "] });
+    await repo.createNote({ title: "Milk", tags: ["home"] });
+    expect(a.folder?.name).toBe("Study");
+    expect(a.tags).toEqual(["exam", "japanese"]);
+    expect((await repo.listNotes({ folder: "study" })).map((n) => n.id)).toEqual([a.id]);
+    expect((await repo.listNotes({ folder: "none" })).length).toBe(1);
+    expect((await repo.listNotes({ tag: "#Exam" })).map((n) => n.id)).toEqual([a.id]);
+    expect((await repo.listNotes({ q: "japan" })).map((n) => n.id)).toEqual([a.id]);
+    expect((await repo.listFolders())[0]).toMatchObject({ name: "Study", count: 1 });
+    expect((await repo.listTags()).map((t) => t.tag)).toEqual(["exam", "home", "japanese"]);
+  });
+  it("replaces tags, moves out of a folder, and keeps notes when a folder is deleted", async () => {
+    const a = await repo.createNote({ title: "x", folder: "F", tags: ["a", "b"] });
+    const u = await repo.updateNote(a.id, { tags: ["c"], folder: null });
+    expect(u?.tags).toEqual(["c"]);
+    expect(u?.folder).toBeNull();
+    const b = await repo.createNote({ title: "y", folder: "G" });
+    expect(await repo.deleteFolder(b.folder!.id)).toBe(true);
+    expect((await repo.getNote(b.id))?.folder).toBeNull();
+  });
+  it("renames a folder and refuses a duplicate name", async () => {
+    const f1 = await repo.createFolder("One");
+    await repo.createFolder("Two");
+    expect((await repo.renameFolder(f1.id, "Uno"))?.name).toBe("Uno");
+    await expect(repo.renameFolder(f1.id, "two")).rejects.toThrow(repo.InputError);
+  });
+  it("links a note to a task, an event and a goal, and cleans up when they go", async () => {
+    const n = await repo.createNote({ title: "Plan" });
+    const t = await repo.createTodo({ title: "Do it" });
+    const e = await repo.createEvent({ title: "Meet", start: "2026-11-12T10:00:00+07:00" });
+    const g = await repo.createGoal({ title: "Goal", horizon: "short" });
+    await repo.linkNote(n.id, { entity_type: "task", entity_id: t.id });
+    await repo.linkNote(n.id, { entity_type: "task", entity_id: t.id });
+    await repo.linkNote(n.id, { entity_type: "event", entity_id: e.id });
+    await repo.linkNote(n.id, { entity_type: "goal", entity_id: g.id });
+    const d = await repo.getNoteDetail(n.id);
+    expect(d?.links.tasks.map((x) => x.id)).toEqual([t.id]);
+    expect(d?.links.events.map((x) => x.id)).toEqual([e.id]);
+    expect(d?.links.goals.map((x) => x.id)).toEqual([g.id]);
+    expect(d?.event_id).toBe(e.id);
+    await expect(repo.linkNote(n.id, { entity_type: "task", entity_id: "nope" })).rejects.toThrow(repo.InputError);
+    await repo.deleteTodo(t.id);
+    await repo.deleteEvent(e.id);
+    const after = await repo.getNoteDetail(n.id);
+    expect(after?.links.tasks).toEqual([]);
+    expect(after?.links.events).toEqual([]);
+    expect(after?.event_id).toBeNull();
+    expect(await repo.unlinkNote(n.id, { entity_type: "goal", entity_id: g.id })).toBe(true);
+  });
+});

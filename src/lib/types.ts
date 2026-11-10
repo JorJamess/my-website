@@ -49,7 +49,9 @@ export type Note = {
   title: string;
   content: string;
   note_date: string | null; // YYYY-MM-DD
-  event_id: string | null;
+  event_id: string | null; // the first linked event, kept for older callers
+  folder: { id: string; name: string } | null;
+  tags: string[];
   pinned: boolean;
   created_at: string;
   updated_at: string;
@@ -159,3 +161,15 @@ export type GoalDetail = GoalOverview & {
 };
 
 export type GoalBrief = { id: string; title: string; color: EventColor; percent: number | null; days_left: number | null; target_date: string | null; overdue: boolean };
+
+export type NoteDetail = Note & {
+  links: {
+    tasks: { id: string; title: string; done: boolean }[];
+    events: { id: string; title: string; start_at: string; all_day: boolean; color: EventColor }[];
+    goals: { id: string; title: string; color: EventColor }[];
+  };
+};
+
+export type NoteFolder = { id: string; name: string; count: number };
+export const NOTE_LINK_TYPES = ["task", "event", "goal"] as const;
+export type NoteLinkType = (typeof NOTE_LINK_TYPES)[number];

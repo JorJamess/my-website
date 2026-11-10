@@ -79,7 +79,7 @@ export async function getSummary(days = 7): Promise<Summary> {
     todayEvents,
     upcoming: upRes.filter((e) => e.start_at >= tomorrowStart).slice(0, 50),
     overdue: overdueRes.results.map(toEvent),
-    recentNotes: notesRes.results.map(toNote),
+    recentNotes: notesRes.results.map((r) => toNote(r)),
     todos: todosRes.results.map(toTodo),
     overdueTodos: overdueTodosRes.results.map(toTodo),
     todosFocus: focusRes.results.map(toTodo),

@@ -98,6 +98,8 @@ export const goalLinkSchema = z.object({
   entity_id: z.string().min(1).describe("id ของ task/habit/event/note นั้น"),
 });
 
+const tagsSchema = z.array(z.string().min(1).max(40)).max(12);
+
 export const noteCreateSchema = z.object({
   title: z.string().min(1).max(200).describe("หัวข้อบันทึก"),
   content: z.string().max(50000).optional().describe("เนื้อหา (รองรับ Markdown)"),
@@ -108,6 +110,8 @@ export const noteCreateSchema = z.object({
     .describe("ผูกกับวันที่ YYYY-MM-DD (ไม่บังคับ)"),
   event_id: z.string().optional().describe("ผูกกับ id ของงาน (ไม่บังคับ)"),
   pinned: z.boolean().optional().describe("ปักหมุดไว้ด้านบน"),
+  tags: tagsSchema.optional().describe("แท็ก เช่น [\"japanese\", \"exam\"] (สูงสุด 8, ตัวพิมพ์เล็ก)"),
+  folder: z.string().min(1).max(60).nullable().optional().describe("ชื่อโฟลเดอร์ (สร้างให้อัตโนมัติถ้ายังไม่มี)"),
 });
 
 export const noteUpdateSchema = z.object({
@@ -116,7 +120,16 @@ export const noteUpdateSchema = z.object({
   note_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   event_id: z.string().nullable().optional(),
   pinned: z.boolean().optional(),
+  tags: tagsSchema.optional().describe("แทนที่แท็กทั้งหมดของบันทึกนี้"),
+  folder: z.string().min(1).max(60).nullable().optional().describe("ชื่อโฟลเดอร์; null เพื่อเอาออกจากโฟลเดอร์"),
 });
+
+export const noteLinkSchema = z.object({
+  entity_type: z.enum(["task", "event", "goal"]).describe("ชนิดของสิ่งที่จะผูกกับบันทึก"),
+  entity_id: z.string().min(1).describe("id ของ task/event/goal นั้น"),
+});
+
+export const folderSchema = z.object({ name: z.string().min(1).max(60) });
 
 const habitBase = {
   title: z.string().min(1).max(200).describe("ชื่อนิสัย เช่น อ่านหนังสือ 20 นาที"),
@@ -172,3 +185,4 @@ export type GoalUpdateInput = z.infer<typeof goalUpdateSchema>;
 export type MilestoneCreateInput = z.infer<typeof milestoneCreateSchema>;
 export type MilestoneUpdateInput = z.infer<typeof milestoneUpdateSchema>;
 export type GoalLinkInput = z.infer<typeof goalLinkSchema>;
+export type NoteLinkInput = z.infer<typeof noteLinkSchema>;

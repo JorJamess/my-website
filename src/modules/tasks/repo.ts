@@ -93,6 +93,7 @@ export async function deleteCategory(id: string): Promise<boolean> {
   const { db } = await ctx();
   await db.prepare("UPDATE todos SET category_id = NULL WHERE category_id = ?").bind(id).run();
   await db.prepare("UPDATE goals SET category_id = NULL WHERE category_id = ?").bind(id).run();
+  await db.prepare("UPDATE notes SET folder_id = NULL WHERE folder_id = ?").bind(id).run();
   const r = await db.prepare("DELETE FROM categories WHERE id = ?").bind(id).run();
   return (r.meta.changes ?? 0) > 0;
 }
@@ -213,6 +214,7 @@ export async function updateTodo(id: string, input: TodoUpdateInput): Promise<To
 export async function deleteTodo(id: string): Promise<boolean> {
   const { db } = await ctx();
   await db.prepare("DELETE FROM goal_links WHERE entity_type = 'task' AND entity_id IN (SELECT id FROM todos WHERE parent_id = ?1 OR id = ?1)").bind(id).run();
+  await db.prepare("DELETE FROM note_links WHERE entity_type = 'task' AND entity_id IN (SELECT id FROM todos WHERE parent_id = ?1 OR id = ?1)").bind(id).run();
   await db.prepare("DELETE FROM todos WHERE parent_id = ?").bind(id).run();
   const r = await db.prepare("DELETE FROM todos WHERE id = ?").bind(id).run();
   return (r.meta.changes ?? 0) > 0;

@@ -9,6 +9,9 @@ export const GET = api(async (req) => {
     q: p.get("q") || undefined,
     date: p.get("date") || undefined,
     eventId: p.get("event_id") || undefined,
+    folder: p.get("folder") || undefined,
+    tag: p.get("tag") || undefined,
+    pinned: p.get("pinned") === "1" || undefined,
   });
   return NextResponse.json({ notes });
 });

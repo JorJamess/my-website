@@ -5,6 +5,7 @@ import {
   eventUpdateSchema,
   noteCreateSchema,
   noteUpdateSchema,
+  noteLinkSchema,
   todoCreateSchema,
   todoUpdateSchema,
   habitCreateSchema,
@@ -132,6 +133,8 @@ function fmtNote(n: Note, full = true) {
   return {
     id: n.id,
     title: n.title,
+    folder: n.folder?.name ?? null,
+    tags: n.tags,
     ...(full ? { content: n.content } : { preview: n.content.slice(0, 200) }),
     note_date: n.note_date,
     event_id: n.event_id,
@@ -253,11 +256,13 @@ export const tools: ToolDef[] = [
       query: z.string().optional(),
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("YYYY-MM-DD"),
       event_id: z.string().optional(),
+      folder: z.string().optional().describe("ชื่อโฟลเดอร์ (หรือ none = ที่ไม่มีโฟลเดอร์)"),
+      tag: z.string().optional(),
       limit: z.number().int().min(1).max(200).optional(),
     }),
     annotations: { readOnlyHint: true },
-    run: async ({ query, date, event_id, limit }) => {
-      const notes = await repo.listNotes({ q: query, date, eventId: event_id, limit: limit ?? 30 });
+    run: async ({ query, date, event_id, folder, tag, limit }) => {
+      const notes = await repo.listNotes({ q: query, date, eventId: event_id, folder, tag, limit: limit ?? 30 });
       return { count: notes.length, notes: notes.map((n) => fmtNote(n, false)) };
     },
   }),
@@ -268,10 +273,44 @@ export const tools: ToolDef[] = [
     schema: z.object({ id }),
     annotations: { readOnlyHint: true },
     run: async ({ id }) => {
-      const n = await repo.getNote(id);
+      const n = await repo.getNoteDetail(id);
       if (!n) throw new repo.InputError(`ไม่พบบันทึก id=${id}`);
-      return fmtNote(n);
+      return {
+        ...fmtNote(n),
+        links: {
+          tasks: n.links.tasks,
+          events: n.links.events.map((e) => ({ id: e.id, title: e.title, start: e.all_day ? e.start_at.slice(0, 10) : e.start_at })),
+          goals: n.links.goals.map((g) => ({ id: g.id, title: g.title })),
+        },
+      };
     },
+  }),
+  define({
+    name: "link_note",
+    title: "ผูกบันทึก",
+    description: "ผูกบันทึกเข้ากับ task, event หรือ goal (ผูกซ้ำได้ไม่เป็นไร)",
+    schema: noteLinkSchema.extend({ id }),
+    annotations: { idempotentHint: true },
+    run: async ({ id, ...link }) => {
+      await repo.linkNote(id, link);
+      return { linked: { note: id, ...link } };
+    },
+  }),
+  define({
+    name: "unlink_note",
+    title: "เลิกผูกบันทึก",
+    description: "เลิกผูกบันทึกกับ task/event/goal (ไม่ลบอะไรทั้งสิ้น)",
+    schema: noteLinkSchema.extend({ id }),
+    annotations: { idempotentHint: true },
+    run: async ({ id, ...link }) => ({ unlinked: await repo.unlinkNote(id, link) }),
+  }),
+  define({
+    name: "list_note_tags",
+    title: "ดูแท็กบันทึก",
+    description: "แท็กทั้งหมดที่ใช้ในบันทึก พร้อมจำนวน และรายการโฟลเดอร์",
+    schema: z.object({}),
+    annotations: { readOnlyHint: true },
+    run: async () => ({ tags: await repo.listTags(), folders: (await repo.listFolders()).map((f) => ({ name: f.name, notes: f.count })) }),
   }),
   define({
     name: "create_note",

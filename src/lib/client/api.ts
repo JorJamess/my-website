@@ -2,9 +2,9 @@
 
 import type { Analytics } from "@/modules/analytics/repo";
 import type { CalendarItems } from "@/modules/calendar/repo";
-import type { CalendarEvent, Category, EventColor, GoalDetail, GoalOverview, HabitOverview, Note, Summary, Todo } from "@/lib/types";
+import type { CalendarEvent, Category, EventColor, GoalDetail, GoalOverview, HabitOverview, Note, NoteDetail, NoteFolder, Summary, Todo } from "@/lib/types";
 import type { MoneyCalendar, MoneySummary, MoneyTransaction } from "@/lib/money-types";
-import type { EventCreateInput, EventUpdateInput, NoteCreateInput, NoteUpdateInput, TodoCreateInput, TodoUpdateInput, HabitCreateInput, HabitUpdateInput, CheckinInput, GoalCreateInput, GoalUpdateInput, MilestoneCreateInput, MilestoneUpdateInput, GoalLinkInput } from "@/lib/schemas";
+import type { EventCreateInput, EventUpdateInput, NoteCreateInput, NoteUpdateInput, NoteLinkInput, TodoCreateInput, TodoUpdateInput, HabitCreateInput, HabitUpdateInput, CheckinInput, GoalCreateInput, GoalUpdateInput, MilestoneCreateInput, MilestoneUpdateInput, GoalLinkInput } from "@/lib/schemas";
 
 export const UNAUTHORIZED_EVENT = "mw:unauthorized";
 export const DATA_CHANGED_EVENT = "mw:data-changed";
@@ -107,8 +107,23 @@ export const api = {
   linkGoal: (goalId: string, input: GoalLinkInput) => request<{ ok: true }>(`/api/goals/${goalId}/links`, json("POST", input)),
   unlinkGoal: (goalId: string, input: GoalLinkInput) => request<{ ok: true }>(`/api/goals/${goalId}/links`, json("DELETE", input)),
 
-  notes: (q?: string) =>
-    request<{ notes: Note[] }>(`/api/notes${q ? `?q=${encodeURIComponent(q)}` : ""}`).then((r) => r.notes),
+  notes: (f: { q?: string; folder?: string; tag?: string; pinned?: boolean } = {}) => {
+    const p = new URLSearchParams();
+    if (f.q) p.set("q", f.q);
+    if (f.folder) p.set("folder", f.folder);
+    if (f.tag) p.set("tag", f.tag);
+    if (f.pinned) p.set("pinned", "1");
+    const qs = p.toString();
+    return request<{ notes: Note[] }>(`/api/notes${qs ? `?${qs}` : ""}`).then((r) => r.notes);
+  },
+  note: (id: string) => request<{ note: NoteDetail }>(`/api/notes/${id}`).then((r) => r.note),
+  noteFolders: () => request<{ folders: NoteFolder[] }>("/api/notes/folders").then((r) => r.folders),
+  createNoteFolder: (name: string) => request<{ folder: NoteFolder }>("/api/notes/folders", json("POST", { name })).then((r) => r.folder),
+  renameNoteFolder: (id: string, name: string) => request<{ folder: NoteFolder }>(`/api/notes/folders/${id}`, json("PATCH", { name })).then((r) => r.folder),
+  deleteNoteFolder: (id: string) => request<{ ok: true }>(`/api/notes/folders/${id}`, json("DELETE")),
+  noteTags: () => request<{ tags: { tag: string; count: number }[] }>("/api/notes/tags").then((r) => r.tags),
+  linkNote: (id: string, input: NoteLinkInput) => request<{ note: NoteDetail }>(`/api/notes/${id}/links`, json("POST", input)).then((r) => r.note),
+  unlinkNote: (id: string, input: NoteLinkInput) => request<{ note: NoteDetail }>(`/api/notes/${id}/links`, json("DELETE", input)).then((r) => r.note),
   createNote: (input: NoteCreateInput) =>
     request<{ note: Note }>("/api/notes", json("POST", input)).then((r) => r.note),
   updateNote: (id: string, input: NoteUpdateInput) =>
