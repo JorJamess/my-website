@@ -1,8 +1,8 @@
 "use client";
 
-import type { CalendarEvent, Note, Summary, Todo } from "@/lib/types";
+import type { CalendarEvent, HabitOverview, Note, Summary, Todo } from "@/lib/types";
 import type { MoneyCalendar, MoneySummary, MoneyTransaction } from "@/lib/money-types";
-import type { EventCreateInput, EventUpdateInput, NoteCreateInput, NoteUpdateInput, TodoCreateInput, TodoUpdateInput } from "@/lib/schemas";
+import type { EventCreateInput, EventUpdateInput, NoteCreateInput, NoteUpdateInput, TodoCreateInput, TodoUpdateInput, HabitCreateInput, HabitUpdateInput, CheckinInput } from "@/lib/schemas";
 
 export const UNAUTHORIZED_EVENT = "mw:unauthorized";
 export const DATA_CHANGED_EVENT = "mw:data-changed";
@@ -65,6 +65,13 @@ export const api = {
 
   search: (q: string) =>
     request<{ events: CalendarEvent[]; notes: Note[]; todos: Todo[] }>(`/api/search?q=${encodeURIComponent(q)}`),
+
+  habits: (includeArchived = false) =>
+    request<{ habits: HabitOverview[] }>(`/api/habits${includeArchived ? "?archived=1" : ""}`).then((r) => r.habits),
+  createHabit: (input: HabitCreateInput) => request<{ habit: unknown }>("/api/habits", json("POST", input)),
+  updateHabit: (id: string, input: HabitUpdateInput) => request<{ habit: unknown }>(`/api/habits/${id}`, json("PATCH", input)),
+  deleteHabit: (id: string) => request<{ ok: true }>(`/api/habits/${id}`, json("DELETE")),
+  checkin: (id: string, input: CheckinInput) => request<{ ok: true }>(`/api/habits/${id}/checkins`, json("PUT", input)),
 
   notes: (q?: string) =>
     request<{ notes: Note[] }>(`/api/notes${q ? `?q=${encodeURIComponent(q)}` : ""}`).then((r) => r.notes),

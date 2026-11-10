@@ -63,6 +63,19 @@ describe("restore", () => {
     expect(todos[0].important).toBe(true);
   });
 
+  it("round-trips habits and their check-ins", async () => {
+    const env = freshEnv();
+    const h = await repo.createHabit({ title: "Gym", schedule_type: "weekdays", weekdays: [1, 3, 5] });
+    await repo.setCheckin(h.id);
+    const snap = JSON.parse(JSON.stringify(await buildSnapshot(env.DB, "manual")));
+    await repo.deleteHabit(h.id);
+    await restoreSnapshot(env.DB, parseSnapshot(snap));
+    const [o] = await repo.getHabitsOverview();
+    expect(o.title).toBe("Gym");
+    expect(o.weekdays).toEqual([1, 3, 5]);
+    expect(o.stats.done_today).toBe(true);
+  });
+
   it("leaves tables that are absent from an older backup untouched", async () => {
     const env = freshEnv();
     await repo.createTodo({ title: "keep me" });

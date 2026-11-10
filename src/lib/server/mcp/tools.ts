@@ -7,6 +7,9 @@ import {
   noteUpdateSchema,
   todoCreateSchema,
   todoUpdateSchema,
+  habitCreateSchema,
+  habitUpdateSchema,
+  checkinSchema,
 } from "@/lib/schemas";
 import * as repo from "@/lib/server/repo";
 import { listMessages, setMessageRead } from "@/lib/server/messages";
@@ -14,7 +17,8 @@ import { getVisitStats } from "@/lib/analytics-core";
 import { getEnv } from "@/lib/server/env";
 import { addDaysKey, formatLocal, localDateKey } from "@/lib/time";
 import { repeatLabel } from "@/lib/recurrence";
-import type { CalendarEvent, Note, Todo } from "@/lib/types";
+import { scheduleLabel } from "@/lib/habits";
+import type { CalendarEvent, HabitOverview, HabitToday, Note, Todo } from "@/lib/types";
 
 type ToolDef = {
   name: string;
@@ -60,6 +64,27 @@ function fmtTodo(t: Todo) {
   };
 }
 
+function fmtHabit(h: HabitOverview) {
+  const s = h.stats;
+  return {
+    id: h.id,
+    title: h.title,
+    schedule: scheduleLabel(h),
+    start_date: h.start_date,
+    scheduled_today: s.scheduled_today,
+    done_today: s.done_today,
+    current_streak: s.current_streak,
+    longest_streak: s.longest_streak,
+    last_30_days: { done: s.last30.done, scheduled: s.last30.scheduled, rate: s.last30.rate === null ? null : Math.round(s.last30.rate * 100) / 100 },
+    total_checkins: s.total_checkins,
+    // oldest to newest, this week's Monday..Sunday: done | missed | due | upcoming | off
+    this_week: h.history.slice(-7).map((d) => ({ day: d.day, state: d.state })),
+    ...(h.archived_at ? { archived: true } : {}),
+    ...(h.description ? { description: h.description } : {}),
+  };
+}
+const fmtHabitToday = (h: HabitToday) => ({ id: h.id, title: h.title, done: h.done, current_streak: h.current_streak });
+
 function fmtNote(n: Note, full = true) {
   return {
     id: n.id,
@@ -88,7 +113,7 @@ export const tools: ToolDef[] = [
     name: "get_summary",
     title: "สรุปกำหนดการ",
     description:
-      "สรุปภาพรวม: งานวันนี้ (รวมงานที่ทำซ้ำ), งานที่กำลังจะมาถึงใน N วัน, งานที่เลยกำหนดแต่ยังไม่เสร็จ, To-do ที่ยังไม่เสร็จ, บันทึกล่าสุด และสถิติสัปดาห์/เดือน",
+      "สรุปภาพรวม: งานวันนี้ (รวมงานที่ทำซ้ำ), งานที่กำลังจะมาถึงใน N วัน, งานที่เลยกำหนดแต่ยังไม่เสร็จ, To-do ที่ยังไม่เสร็จ, นิสัย (habits) ที่ต้องทำวันนี้, บันทึกล่าสุด และสถิติสัปดาห์/เดือน",
     schema: z.object({
       days: z.number().int().min(1).max(60).optional().describe("จำนวนวันข้างหน้าที่จะดู (ค่าเริ่มต้น 7)"),
     }),
@@ -102,6 +127,7 @@ export const tools: ToolDef[] = [
         upcoming: s.upcoming.map((e) => fmtEvent(e, tz)),
         overdue_not_done: s.overdue.map((e) => fmtEvent(e, tz)),
         open_todos: s.todos.map(fmtTodo),
+        habits_today: s.habitsToday.map(fmtHabitToday),
         recent_notes: s.recentNotes.map((n) => fmtNote(n, false)),
         counts: s.counts,
       };
@@ -234,6 +260,65 @@ export const tools: ToolDef[] = [
 ];
 
 tools.push(
+  define({
+    name: "list_habits",
+    title: "ดูนิสัย (Habits)",
+    description:
+      "รายการนิสัยที่ติดตามอยู่ พร้อม streak ปัจจุบัน/สูงสุด อัตราสำเร็จ 30 วัน และสถานะของสัปดาห์นี้ (ตัวเลขจริง ไม่ใช่คะแนน). ใช้ตอบเรื่องความสม่ำเสมอ",
+    schema: z.object({ include_archived: z.boolean().optional() }),
+    annotations: { readOnlyHint: true },
+    run: async ({ include_archived }) => {
+      const habits = await repo.getHabitsOverview({ includeArchived: include_archived });
+      return { count: habits.length, habits: habits.map(fmtHabit) };
+    },
+  }),
+  define({
+    name: "create_habit",
+    title: "สร้างนิสัยใหม่",
+    description: "สร้างนิสัยที่อยากทำซ้ำ: schedule_type=daily (ทุกวัน) | weekdays (ใส่ weekdays เช่น [1,3,5]) | interval (ใส่ interval_days เช่น 3)",
+    schema: habitCreateSchema as unknown as z.ZodObject,
+    run: async (args) => {
+      const h = await repo.createHabit(habitCreateSchema.parse(args));
+      const [o] = (await repo.getHabitsOverview()).filter((x) => x.id === h.id);
+      return { created: fmtHabit(o) };
+    },
+  }),
+  define({
+    name: "update_habit",
+    title: "แก้ไขนิสัย",
+    description: "แก้ไขนิสัยตาม id (ส่งเฉพาะฟิลด์ที่ต้องการเปลี่ยน). archived=true เพื่อเก็บเข้าคลังโดยไม่ลบประวัติ",
+    schema: habitUpdateSchema.extend({ id }),
+    annotations: { idempotentHint: true },
+    run: async ({ id, ...rest }) => {
+      const h = await repo.updateHabit(id, rest);
+      if (!h) throw new repo.InputError(`ไม่พบนิสัย id=${id}`);
+      const [o] = (await repo.getHabitsOverview({ includeArchived: true })).filter((x) => x.id === id);
+      return { updated: fmtHabit(o) };
+    },
+  }),
+  define({
+    name: "check_in_habit",
+    title: "เช็กอินนิสัย",
+    description: "ทำเครื่องหมายว่าทำนิสัยนี้แล้ว (ค่าเริ่มต้นคือวันนี้; ใส่ day เพื่อย้อนหลัง; done=false เพื่อยกเลิก). เช็กอินล่วงหน้าไม่ได้",
+    schema: checkinSchema.extend({ id }),
+    annotations: { idempotentHint: true },
+    run: async ({ id, ...rest }) => {
+      const r = await repo.setCheckin(id, rest);
+      const [o] = (await repo.getHabitsOverview({ includeArchived: true })).filter((x) => x.id === id);
+      return { day: r.day, done: r.done, habit: fmtHabit(o) };
+    },
+  }),
+  define({
+    name: "delete_habit",
+    title: "ลบนิสัย",
+    description: "ลบนิสัยและประวัติเช็กอินทั้งหมดอย่างถาวร (ถ้าแค่ไม่อยากเห็นให้ใช้ update_habit archived=true)",
+    schema: z.object({ id }),
+    annotations: { destructiveHint: true, idempotentHint: true },
+    run: async ({ id }) => {
+      if (!(await repo.deleteHabit(id))) throw new repo.InputError(`ไม่พบนิสัย id=${id}`);
+      return { deleted: id };
+    },
+  }),
   define({
     name: "list_todos",
     title: "ดู To-do",

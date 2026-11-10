@@ -5,6 +5,7 @@ import { ctx } from "../core";
 import { fetchEvents, toEvent, type EventRow } from "../events/repo";
 import { toNote, type NoteRow } from "../notes/repo";
 import { toTodo, type TodoRow } from "../tasks/repo";
+import { getHabitsToday } from "../habits/repo";
 
 /* ----------------------------- Summary ----------------------------- */
 
@@ -26,7 +27,7 @@ export async function getSummary(days = 7): Promise<Summary> {
   const monthStart = parseLocal(monthStartKey, tz).toISOString();
   const monthEnd = parseLocal(nextMonthKey, tz).toISOString();
 
-  const [monthEvents, upRes, overdueRes, notesRes, todosRes, counts] = await Promise.all([
+  const [monthEvents, upRes, overdueRes, notesRes, todosRes, counts, habitsToday] = await Promise.all([
     fetchEvents(db, tz, monthStart < weekStart ? monthStart : weekStart, monthEnd > weekEnd ? monthEnd : weekEnd),
     fetchEvents(db, tz, tomorrowStart, upcomingEnd),
     db
@@ -44,6 +45,7 @@ export async function getSummary(days = 7): Promise<Summary> {
     db
       .prepare(`SELECT (SELECT COUNT(*) FROM notes) AS notes, (SELECT COUNT(*) FROM todos WHERE done = 0) AS todosOpen`)
       .first<{ notes: number; todosOpen: number }>(),
+    getHabitsToday(),
   ]);
 
   const overlaps = (e: CalendarEvent, from: string, to: string) =>
@@ -61,6 +63,7 @@ export async function getSummary(days = 7): Promise<Summary> {
     overdue: overdueRes.results.map(toEvent),
     recentNotes: notesRes.results.map(toNote),
     todos: todosRes.results.map(toTodo),
+    habitsToday,
     counts: {
       thisWeek: inWeek.length,
       thisMonth: inMonth.length,

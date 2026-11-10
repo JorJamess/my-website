@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import * as repo from "@/lib/server/repo";
-import { localDateKey } from "@/lib/time";
+import { addDaysKey, localDateKey } from "@/lib/time";
 import { freshEnv } from "./helpers/env";
 
 beforeEach(() => {
@@ -144,5 +144,73 @@ describe("summary", () => {
     await repo.createEvent({ title: "Gym", start: "2026-01-05 18:00", repeat_days: [1] });
     const s = await repo.getSummary(7);
     expect(s.overdue).toEqual([]);
+  });
+});
+
+describe("habits", () => {
+  it("creates, updates and deletes a habit with its history", async () => {
+    const h = await repo.createHabit({ title: " Read ", schedule_type: "daily" });
+    expect(h.title).toBe("Read");
+    expect(h.start_date).toBe(localDateKey());
+    await repo.setCheckin(h.id);
+    const u = await repo.updateHabit(h.id, { title: "Read 20 min", schedule_type: "weekdays", weekdays: [1, 3] });
+    expect(u?.weekdays).toEqual([1, 3]);
+    expect(await repo.deleteHabit(h.id)).toBe(true);
+    expect(await repo.getHabit(h.id)).toBeNull();
+    const { db } = { db: (globalThis as unknown as { __testEnv: { DB: D1Database } }).__testEnv.DB };
+    const left = await db.prepare("SELECT COUNT(*) AS n FROM habit_checkins").first<{ n: number }>();
+    expect(left?.n).toBe(0);
+  });
+
+  it("validates the schedule on create and on update", async () => {
+    await expect(repo.createHabit({ title: "x", schedule_type: "interval" } as never)).rejects.toThrow();
+    const h = await repo.createHabit({ title: "x", schedule_type: "interval", interval_days: 3 });
+    await expect(repo.updateHabit(h.id, { schedule_type: "weekdays" })).rejects.toThrow(repo.InputError);
+    expect((await repo.updateHabit(h.id, { schedule_type: "daily" }))?.interval_days).toBeNull();
+  });
+
+  it("checks in and out, idempotently, and refuses the future", async () => {
+    const h = await repo.createHabit({ title: "Gym", schedule_type: "daily" });
+    const today = localDateKey();
+    await repo.setCheckin(h.id);
+    await repo.setCheckin(h.id, { done: true }); // again: still one row
+    let o = (await repo.getHabitsOverview())[0];
+    expect(o.stats.done_today).toBe(true);
+    expect(o.stats.total_checkins).toBe(1);
+    await repo.setCheckin(h.id, { done: false });
+    o = (await repo.getHabitsOverview())[0];
+    expect(o.stats.done_today).toBe(false);
+    await expect(repo.setCheckin(h.id, { day: "2999-01-01" })).rejects.toThrow(repo.InputError);
+    await expect(repo.setCheckin("nope")).rejects.toThrow(repo.InputError);
+    await expect(repo.setCheckin(h.id, { day: "2026-13-45" })).rejects.toThrow(repo.InputError);
+    expect(today).toBeTruthy();
+  });
+
+  it("backfills a past day and reports streaks in the overview", async () => {
+    const today = localDateKey();
+    const h = await repo.createHabit({ title: "Read", schedule_type: "daily", start_date: addDaysKey(today, -5) });
+    await repo.setCheckin(h.id, { day: addDaysKey(today, -2) });
+    await repo.setCheckin(h.id, { day: addDaysKey(today, -1) });
+    const [o] = await repo.getHabitsOverview();
+    expect(o.stats.current_streak).toBe(2);
+    expect(o.history.length).toBe(84);
+    expect(o.history.find((d) => d.day === addDaysKey(today, -2))?.state).toBe("done");
+  });
+
+  it("hides archived habits unless asked, and lists today's scheduled ones", async () => {
+    const a = await repo.createHabit({ title: "A", schedule_type: "daily" });
+    await repo.createHabit({ title: "B", schedule_type: "daily" });
+    await repo.updateHabit(a.id, { archived: true });
+    expect((await repo.getHabitsOverview()).map((h) => h.title)).toEqual(["B"]);
+    expect((await repo.getHabitsOverview({ includeArchived: true })).length).toBe(2);
+    expect((await repo.getHabitsToday()).map((h) => h.title)).toEqual(["B"]);
+    await repo.updateHabit(a.id, { archived: false });
+    expect((await repo.getHabitsToday()).length).toBe(2);
+  });
+
+  it("puts today's habits in the summary", async () => {
+    await repo.createHabit({ title: "Read", schedule_type: "daily" });
+    const s = await repo.getSummary(7);
+    expect(s.habitsToday.map((h) => h.title)).toEqual(["Read"]);
   });
 });

@@ -13,7 +13,7 @@ type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString("en-US", { timeZone: "Asia/Bangkok", dateStyle: "medium", timeStyle: "short" });
-const TABLE_LABELS: Record<string, string> = { events: "events", notes: "notes", todos: "to-dos" };
+const TABLE_LABELS: Record<string, string> = { events: "events", notes: "notes", todos: "to-dos", habits: "habits", habit_checkins: "check-ins" };
 const REASONS: Record<string, string> = { weekly: "Weekly", manual: "Manual", "pre-restore": "Before a restore" };
 const countsText = (b: { counts?: Record<string, number>; events?: number; notes?: number }) => {
   const c = b.counts ?? { events: b.events ?? 0, notes: b.notes ?? 0 };
@@ -67,7 +67,7 @@ function Backups() {
   return (
     <Section
       title="Backups"
-      description="Your events, notes and to-dos are backed up every Monday at 03:00 Thailand time. Each backup is kept for 8 weeks."
+      description="Your events, notes, to-dos and habits are backed up every Monday at 03:00 Thailand time. Each backup is kept for 8 weeks."
     >
       <div className="flex flex-wrap gap-2">
         <Button className="px-4" onClick={backupNow} disabled={saving}>

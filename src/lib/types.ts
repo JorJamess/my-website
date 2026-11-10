@@ -48,6 +48,44 @@ export type Summary = {
   upcoming: CalendarEvent[];
   overdue: CalendarEvent[];
   todos: Todo[];
+  habitsToday: HabitToday[];
   recentNotes: Note[];
   counts: { thisWeek: number; thisMonth: number; doneThisWeek: number; notes: number; todosOpen: number };
 };
+
+export type HabitScheduleType = "daily" | "weekdays" | "interval";
+
+export type Habit = {
+  id: string;
+  title: string;
+  description: string | null;
+  color: EventColor;
+  schedule_type: HabitScheduleType;
+  weekdays: number[] | null; // 0 = Sunday
+  interval_days: number | null;
+  start_date: string; // YYYY-MM-DD
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** done = checked in; missed = scheduled, past, not done; due = scheduled today, not done yet;
+ *  upcoming = scheduled in the future; off = not scheduled */
+export type HabitDayState = "done" | "missed" | "due" | "upcoming" | "off";
+
+export type HabitStats = {
+  current_streak: number; // consecutive scheduled days done, ending at the latest closed scheduled day
+  longest_streak: number;
+  last30: { done: number; scheduled: number; rate: number | null };
+  done_today: boolean;
+  scheduled_today: boolean;
+  total_checkins: number;
+};
+
+export type HabitOverview = Habit & {
+  stats: HabitStats;
+  /** the last 12 weeks, Monday of the first week up to Sunday of this week */
+  history: { day: string; state: HabitDayState }[];
+};
+
+export type HabitToday = { id: string; title: string; color: EventColor; done: boolean; current_streak: number };

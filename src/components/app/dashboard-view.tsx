@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { EventDialog } from "./event-dialog";
 import { AddTodo, TodoItem } from "./todo-list";
+import { HabitsToday } from "./habits-today";
 import { MessagesCard } from "./messages-card";
 import { MoneyCard } from "./money-card";
 import { Pupu } from "./pupu";
@@ -135,6 +136,7 @@ export function DashboardView() {
 
         <div className="min-w-0 space-y-8">
           <MessagesCard />
+          {data?.habitsToday.length ? <HabitsToday habits={data.habitsToday} /> : null}
           <div>
             <SectionLabel>
               To do{data?.counts.todosOpen ? <span className="ml-1.5 tabular-nums">· {data.counts.todosOpen}</span> : null}

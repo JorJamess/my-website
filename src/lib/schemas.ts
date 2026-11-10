@@ -71,9 +71,51 @@ export const noteUpdateSchema = z.object({
   pinned: z.boolean().optional(),
 });
 
+const habitBase = {
+  title: z.string().min(1).max(200).describe("ชื่อนิสัย เช่น อ่านหนังสือ 20 นาที"),
+  description: z.string().max(2000).nullable().optional(),
+  color: z.enum(EVENT_COLORS).optional(),
+  schedule_type: z.enum(["daily", "weekdays", "interval"]).describe("daily = ทุกวัน, weekdays = เลือกวันในสัปดาห์, interval = ทุก N วัน"),
+  weekdays: repeatDays.nullable().optional().describe("ใช้กับ weekdays: 0=อาทิตย์ … 6=เสาร์"),
+  interval_days: z.number().int().min(2).max(365).nullable().optional().describe("ใช้กับ interval: ทำทุกกี่วัน"),
+  start_date: dateKey.optional().describe("วันที่เริ่มนับ YYYY-MM-DD (ค่าเริ่มต้น = วันนี้)"),
+};
+
+/** weekdays needs weekdays, interval needs interval_days */
+export function checkHabitSchedule(h: { schedule_type: string; weekdays?: number[] | null; interval_days?: number | null }) {
+  if (h.schedule_type === "weekdays" && !h.weekdays?.length) return "Pick at least one day of the week";
+  if (h.schedule_type === "interval" && !h.interval_days) return "Say how many days apart (2 or more)";
+  return null;
+}
+
+export const habitCreateSchema = z.object(habitBase).superRefine((h, ctx) => {
+  const err = checkHabitSchedule(h);
+  if (err) ctx.addIssue({ code: "custom", message: err, path: [h.schedule_type === "weekdays" ? "weekdays" : "interval_days"] });
+});
+
+export const habitUpdateSchema = z.object({
+  title: habitBase.title.optional(),
+  description: habitBase.description,
+  color: habitBase.color,
+  schedule_type: habitBase.schedule_type.optional(),
+  weekdays: habitBase.weekdays,
+  interval_days: habitBase.interval_days,
+  start_date: habitBase.start_date,
+  archived: z.boolean().optional().describe("true = เก็บเข้าคลัง (ไม่แสดงแต่ไม่ลบประวัติ), false = นำกลับมา"),
+});
+
+export const checkinSchema = z.object({
+  day: dateKey.optional().describe("วันที่ YYYY-MM-DD (ค่าเริ่มต้น = วันนี้; ย้อนหลังได้ แต่ล่วงหน้าไม่ได้)"),
+  done: z.boolean().optional().describe("ค่าเริ่มต้น true; false = ยกเลิกการเช็กอินวันนั้น"),
+  note: z.string().max(500).nullable().optional(),
+});
+
 export type EventCreateInput = z.infer<typeof eventCreateSchema>;
 export type EventUpdateInput = z.infer<typeof eventUpdateSchema>;
 export type NoteCreateInput = z.infer<typeof noteCreateSchema>;
 export type NoteUpdateInput = z.infer<typeof noteUpdateSchema>;
 export type TodoCreateInput = z.infer<typeof todoCreateSchema>;
 export type TodoUpdateInput = z.infer<typeof todoUpdateSchema>;
+export type HabitCreateInput = z.infer<typeof habitCreateSchema>;
+export type HabitUpdateInput = z.infer<typeof habitUpdateSchema>;
+export type CheckinInput = z.infer<typeof checkinSchema>;
