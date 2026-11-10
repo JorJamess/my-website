@@ -1,7 +1,8 @@
 "use client";
 
 import type { Analytics } from "@/modules/analytics/repo";
-import type { CalendarEvent, Category, GoalDetail, GoalOverview, HabitOverview, Note, Summary, Todo } from "@/lib/types";
+import type { CalendarItems } from "@/modules/calendar/repo";
+import type { CalendarEvent, Category, EventColor, GoalDetail, GoalOverview, HabitOverview, Note, Summary, Todo } from "@/lib/types";
 import type { MoneyCalendar, MoneySummary, MoneyTransaction } from "@/lib/money-types";
 import type { EventCreateInput, EventUpdateInput, NoteCreateInput, NoteUpdateInput, TodoCreateInput, TodoUpdateInput, HabitCreateInput, HabitUpdateInput, CheckinInput, GoalCreateInput, GoalUpdateInput, MilestoneCreateInput, MilestoneUpdateInput, GoalLinkInput } from "@/lib/schemas";
 
@@ -83,6 +84,10 @@ export const api = {
   deleteHabit: (id: string) => request<{ ok: true }>(`/api/habits/${id}`, json("DELETE")),
   checkin: (id: string, input: CheckinInput) => request<{ ok: true }>(`/api/habits/${id}/checkins`, json("PUT", input)),
 
+  calendarItems: (from: string, to: string) => request<CalendarItems>(`/api/calendar/items?from=${from}&to=${to}`),
+  colorNames: () => request<{ names: Record<EventColor, string> }>("/api/settings/colors").then((r) => r.names),
+  setColorNames: (names: Partial<Record<EventColor, string>>) =>
+    request<{ names: Record<EventColor, string> }>("/api/settings/colors", json("PUT", names)).then((r) => r.names),
   analytics: (range: "week" | "month", offset = 0) => request<Analytics>(`/api/analytics?range=${range}&offset=${offset}`),
   goals: (all = false) =>
     request<{ goals: GoalOverview[]; categories: Category[] }>(`/api/goals${all ? "?all=1" : ""}`),

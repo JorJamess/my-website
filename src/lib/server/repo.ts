@@ -8,3 +8,5 @@ export * from "@/modules/summary/repo";
 export * from "@/modules/habits/repo";
 export * from "@/modules/goals/repo";
 export * from "@/modules/analytics/repo";
+export * from "@/modules/settings/repo";
+export * from "@/modules/calendar/repo";

@@ -2,15 +2,21 @@
 
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Receipt } from "lucide-react";
-import { api } from "@/lib/client/api";
+import { toast } from "sonner";
+import { api, notifyChanged } from "@/lib/client/api";
+import { useColorNames } from "@/lib/client/use-color-names";
+import { weekStart } from "@/lib/habits";
 import { useData } from "@/lib/client/use-data";
 import { COLOR_CLASSES } from "@/lib/colors";
 import { formatBahtShort, type MoneyDay, type MoneyRecurring } from "@/lib/money-types";
 import { addDaysKey, eventDayRange, eventOnDay, formatDay, localDateKey, timeOf, weekdayIndex } from "@/lib/time";
-import type { CalendarEvent } from "@/lib/types";
+import type { CalendarEvent, EventColor } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { CalendarLegend, type CalendarFilter } from "./calendar-legend";
+import { CalendarTimeView } from "./calendar-time-view";
 import { EventDialog } from "./event-dialog";
 import { EventRow } from "./event-row";
 import { DayMoney } from "./day-money";
@@ -32,30 +38,83 @@ function shiftMonth(month: string, delta: number) {
   return d.toISOString().slice(0, 7);
 }
 
+function weekTitle(first: string, last: string) {
+  const sameMonth = first.slice(0, 7) === last.slice(0, 7);
+  const end = sameMonth ? formatDay(last, { day: "numeric" }) : formatDay(last, { day: "numeric", month: "short" });
+  return `${formatDay(first, { day: "numeric", month: "short" })} – ${end}, ${formatDay(last, { year: "numeric" })}`;
+}
+
 function sortEvents(a: CalendarEvent, b: CalendarEvent) {
   if (a.all_day !== b.all_day) return a.all_day ? -1 : 1;
   return a.start_at.localeCompare(b.start_at);
 }
 
+type View = "day" | "week" | "month";
+const VIEWS: { id: View; label: string }[] = [
+  { id: "day", label: "Day" },
+  { id: "week", label: "Week" },
+  { id: "month", label: "Month" },
+];
+
+function readSaved<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+function save(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
+
 export function CalendarView() {
   const today = localDateKey();
-  const [month, setMonth] = useState(today.slice(0, 7));
-  const [selected, setSelected] = useState(today);
-  // ทิศทางที่เพิ่งเลื่อนเดือน ใช้เลือก animation ของตาราง
+  // the calendar only renders after login, in the browser, so reading storage during the first render is safe
+  const [view, setViewState] = useState<View>(() => {
+    if (typeof window === "undefined") return "month";
+    const saved = readSaved<View | null>("cal-view", null);
+    return saved ?? (window.innerWidth < 768 ? "day" : "month");
+  });
+  const [anchor, setAnchor] = useState(today);
+  const [filter, setFilterState] = useState<CalendarFilter>(() =>
+    typeof window === "undefined" ? { hidden: [], tasks: true, milestones: true } : readSaved("cal-filter", { hidden: [], tasks: true, milestones: true }),
+  );
+  const colorNames = useColorNames();
+  const setView = (v: View) => (setViewState(v), save("cal-view", v));
+  const setFilter = (f: CalendarFilter) => (setFilterState(f), save("cal-filter", f));
+
+  const month = anchor.slice(0, 7);
+  const selected = anchor;
+  // ทิศทางที่เพิ่งเลื่อน ใช้เลือก animation ของตาราง
   const [dir, setDir] = useState<"next" | "prev" | null>(null);
-  const [dialog, setDialog] = useState<{ open: boolean; event: CalendarEvent | null; date?: string }>({
+  const [dialog, setDialog] = useState<{ open: boolean; event: CalendarEvent | null; date?: string; time?: string }>({
     open: false,
     event: null,
   });
 
-  const days = useMemo(() => monthGrid(month), [month]);
+  // the days on screen for the current view
+  const days = useMemo(() => {
+    if (view === "month") return monthGrid(month);
+    if (view === "week") return Array.from({ length: 7 }, (_, i) => addDaysKey(weekStart(anchor), i));
+    return [anchor];
+  }, [view, month, anchor]);
   const from = days[0];
   const to = addDaysKey(days[days.length - 1], 1);
-  const { data: events, loading } = useData(() => api.events(from, to), [from, to]);
-  // ข้อมูลจากแอปเงิน — ถ้าเชื่อมไม่ได้ก็แค่ไม่แสดง (ไม่ให้ปฏิทินพัง)
+  const { data: allEvents, loading } = useData(() => api.events(from, to), [from, to]);
+  const { data: items } = useData(() => api.calendarItems(from, addDaysKey(to, -1)), [from, to]);
+  const events = useMemo(() => (allEvents ?? []).filter((e) => !filter.hidden.includes(e.color)), [allEvents, filter.hidden]);
+  const usedColors = useMemo(() => new Set<EventColor>((allEvents ?? []).map((e) => e.color)), [allEvents]);
+  const shownItems = useMemo(
+    () => (items ? { tasks: filter.tasks ? items.tasks : [], milestones: filter.milestones ? items.milestones : [] } : null),
+    [items, filter.tasks, filter.milestones],
+  );
+  // ข้อมูลจากแอปเงิน — ถ้าเชื่อมไม่ได้ก็แค่ไม่แสดง (ไม่ให้ปฏิทินพัง) ใช้เฉพาะมุมมองเดือน
   const { data: money } = useData(
-    () => api.moneyCalendar(from, addDaysKey(to, -1)).catch(() => null),
-    [from, to],
+    () => (view === "month" ? api.moneyCalendar(from, addDaysKey(to, -1)).catch(() => null) : Promise.resolve(null)),
+    [from, to, view],
   );
   const moneyDays = useMemo(() => new Map<string, MoneyDay>((money?.days ?? []).map((d) => [d.date, d])), [money]);
   const billsByDay = useMemo(() => {
@@ -66,7 +125,7 @@ export function CalendarView() {
 
   const byDay = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
-    for (const e of events ?? []) {
+    for (const e of events) {
       const [s, en] = eventDayRange(e);
       for (let k = s < from ? from : s, n = 0; k <= en && k < to && n < 62; k = addDaysKey(k, 1), n++) {
         map.set(k, [...(map.get(k) ?? []), e]);
@@ -76,42 +135,76 @@ export function CalendarView() {
     return map;
   }, [events, from, to]);
 
-  const selectedEvents = (events ?? []).filter((e) => eventOnDay(e, selected)).sort(sortEvents);
+  const selectedEvents = events.filter((e) => eventOnDay(e, selected)).sort(sortEvents);
+  const selectedTasks = (shownItems?.tasks ?? []).filter((t) => t.due_date === selected);
+  const selectedMilestones = (shownItems?.milestones ?? []).filter((m) => m.due_date === selected);
   const openNew = (date: string) => setDialog({ open: true, event: null, date });
   const openEvent = (event: CalendarEvent) => setDialog({ open: true, event });
 
   const goto = (delta: number) => {
-    const m = shiftMonth(month, delta);
     setDir(delta > 0 ? "next" : "prev");
-    setMonth(m);
-    setSelected(m === today.slice(0, 7) ? today : `${m}-01`);
+    if (view === "month") {
+      const m = shiftMonth(month, delta);
+      setAnchor(m === today.slice(0, 7) ? today : `${m}-01`);
+    } else setAnchor((a) => addDaysKey(a, delta * (view === "week" ? 7 : 1)));
   };
+  const goToday = () => {
+    setDir(today > anchor ? "next" : "prev");
+    setAnchor(today);
+  };
+
+  async function toggleTask(id: string, done: boolean) {
+    try {
+      await api.updateTodo(id, { done });
+      notifyChanged();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't update the task");
+    }
+  }
+  async function toggleMilestone(goalId: string, id: string, done: boolean) {
+    try {
+      await api.updateMilestone(goalId, id, { done });
+      notifyChanged();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't update the milestone");
+    }
+  }
+
+  const title =
+    view === "month"
+      ? formatDay(`${month}-01`, { month: "long", year: "numeric" })
+      : view === "day"
+        ? formatDay(anchor, { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+        : weekTitle(days[0], days[6]);
+  const unit = view;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <h1 className="min-w-40 text-[26px] font-medium tracking-tight">
-            {formatDay(`${month}-01`, { month: "long", year: "numeric" })}
-          </h1>
+          <h1 className={cn("font-medium tracking-tight", view === "month" ? "min-w-40 text-[26px]" : "text-[22px]")}>{title}</h1>
           {loading && <span className="size-1.5 animate-pulse rounded-full bg-muted-foreground" />}
         </div>
-        <div className="flex items-center gap-1.5">
-          <Button variant="outline" size="icon" aria-label="Previous month" onClick={() => goto(-1)}>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex rounded-lg bg-muted p-0.5" role="group" aria-label="View">
+            {VIEWS.map((v) => (
+              <button
+                key={v.id}
+                aria-pressed={view === v.id}
+                onClick={() => setView(v.id)}
+                className={cn("rounded-md px-3 py-1 text-[13.5px] transition-colors", view === v.id ? "bg-card font-medium shadow-sm" : "text-muted-foreground hover:text-foreground")}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+          <Button variant="outline" size="icon" aria-label={`Previous ${unit}`} onClick={() => goto(-1)}>
             <ChevronLeft />
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              const m = today.slice(0, 7);
-              if (m !== month) setDir(m > month ? "next" : "prev");
-              setMonth(m);
-              setSelected(today);
-            }}
-          >
+          <Button variant="outline" onClick={goToday}>
             Today
           </Button>
-          <Button variant="outline" size="icon" aria-label="Next month" onClick={() => goto(1)}>
+          <Button variant="outline" size="icon" aria-label={`Next ${unit}`} onClick={() => goto(1)}>
             <ChevronRight />
           </Button>
           <Button className="ml-1.5 px-4" onClick={() => openNew(selected)}>
@@ -120,6 +213,27 @@ export function CalendarView() {
         </div>
       </div>
 
+      <CalendarLegend names={colorNames} used={usedColors} filter={filter} onChange={setFilter} />
+
+      {view !== "month" && (
+        <CalendarTimeView
+          key={view}
+          days={days}
+          today={today}
+          events={events}
+          items={shownItems}
+          onOpenEvent={openEvent}
+          onNewAt={(date, minutes) =>
+            setDialog({ open: true, event: null, date, time: `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}` })
+          }
+          onPickDay={(d) => (setAnchor(d), setView("day"))}
+          onToggleTask={toggleTask}
+          onToggleMilestone={toggleMilestone}
+          onSwipe={(d) => goto(d)}
+        />
+      )}
+
+      {view === "month" && (
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <Card className="gap-0 py-0">
           <div className="grid grid-cols-7 border-b text-center text-xs font-medium text-muted-foreground">
@@ -142,8 +256,12 @@ export function CalendarView() {
               const list = byDay.get(key) ?? [];
               const bills = billsByDay.get(key) ?? [];
               const spent = moneyDays.get(key)?.expense ?? 0;
+              const dayTasks = (shownItems?.tasks ?? []).filter((t) => t.due_date === key);
+              const dayMiles = (shownItems?.milestones ?? []).filter((m) => m.due_date === key);
               const shown = list.slice(0, Math.max(0, 3 - bills.length));
-              const hidden = list.length - shown.length;
+              const extraRoom = Math.max(0, 3 - bills.length - shown.length);
+              const extras = [...dayTasks.map((t) => ({ k: `t${t.id}`, label: `☐ ${t.title}`, done: t.done })), ...dayMiles.map((m) => ({ k: `m${m.id}`, label: `◆ ${m.title}`, done: m.done }))];
+              const hidden = list.length - shown.length + Math.max(0, extras.length - extraRoom);
               const isToday = key === today;
               const isSelected = key === selected;
               return (
@@ -151,10 +269,10 @@ export function CalendarView() {
                   key={key}
                   role="button"
                   tabIndex={0}
-                  onClick={() => setSelected(key)}
+                  onClick={() => setAnchor(key)}
                   onDoubleClick={() => openNew(key)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") setSelected(key);
+                    if (e.key === "Enter") setAnchor(key);
                   }}
                   className={cn(
                     "group relative flex min-h-16 cursor-pointer flex-col gap-0.5 border-b border-r p-1 text-left outline-none transition-colors duration-200 hover:bg-muted/50 focus-visible:bg-muted sm:min-h-24 sm:p-1.5",
@@ -212,6 +330,11 @@ export function CalendarView() {
                         {e.title}
                       </button>
                     ))}
+                    {extras.slice(0, extraRoom).map((x) => (
+                      <span key={x.k} className={cn("truncate rounded border border-dashed px-1 py-0.5 text-[11px] leading-tight text-muted-foreground", x.done && "line-through opacity-60")} title={x.label}>
+                        {x.label}
+                      </span>
+                    ))}
                     {hidden > 0 && <span className="px-1 text-[11px] text-muted-foreground">+{hidden} more</span>}
                   </div>
                   {/* dots (mobile) */}
@@ -219,7 +342,7 @@ export function CalendarView() {
                     {list.slice(0, 4).map((e) => (
                       <span key={`${e.id}:${e.start_at}`} className={cn("size-1.5 rounded-full", COLOR_CLASSES[e.color].dot)} />
                     ))}
-                    {bills.length > 0 && <span className="size-1.5 rounded-full border border-muted-foreground" />}
+                    {(bills.length > 0 || dayTasks.length > 0 || dayMiles.length > 0) && <span className="size-1.5 rounded-full border border-muted-foreground" />}
                   </div>
                 </div>
               );
@@ -237,6 +360,24 @@ export function CalendarView() {
             </CardAction>
           </CardHeader>
           <CardContent key={selected} className="motion-fade space-y-3">
+            {(selectedTasks.length > 0 || selectedMilestones.length > 0) && (
+              <ul className="space-y-1.5 text-sm">
+                {selectedTasks.map((t) => (
+                  <li key={t.id} className="flex items-center gap-2.5">
+                    <Checkbox checked={t.done} onCheckedChange={(v) => toggleTask(t.id, v === true)} aria-label={`Mark ${t.title} as done`} />
+                    <span className={cn("min-w-0 flex-1 truncate", t.done && "line-through opacity-60")}>{t.title}</span>
+                    <span className="text-xs text-muted-foreground">Task due</span>
+                  </li>
+                ))}
+                {selectedMilestones.map((m) => (
+                  <li key={m.id} className="flex items-center gap-2.5">
+                    <Checkbox checked={m.done} onCheckedChange={(v) => toggleMilestone(m.goal_id, m.id, v === true)} aria-label={`Mark ${m.title} as done`} />
+                    <span className={cn("min-w-0 flex-1 truncate", m.done && "line-through opacity-60")}>◆ {m.title}</span>
+                    <span className="text-xs text-muted-foreground">{m.goal_title}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
             {selectedEvents.length ? (
               <div className="-mx-2">
                 {selectedEvents.map((e) => (
@@ -259,10 +400,13 @@ export function CalendarView() {
         </Card>
       </div>
 
+      )}
+
       <EventDialog
         open={dialog.open}
         event={dialog.event}
         defaultDate={dialog.date}
+        defaultTime={dialog.time}
         onOpenChange={(open) => setDialog((d) => ({ ...d, open }))}
       />
     </div>

@@ -5,7 +5,8 @@ import { Check, Loader2, MapPin, Trash2 } from "lucide-react";
 import { WEEKDAY_SHORT } from "@/lib/recurrence";
 import { toast } from "sonner";
 import { api, notifyChanged } from "@/lib/client/api";
-import { COLOR_CLASSES, COLOR_LABELS } from "@/lib/colors";
+import { COLOR_CLASSES } from "@/lib/colors";
+import { useColorNames } from "@/lib/client/use-color-names";
 import { eventDayRange, localDateKey, splitLocal, TZ_OFFSET, weekdayIndex } from "@/lib/time";
 import { EVENT_COLORS, type CalendarEvent, type EventColor } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -49,7 +50,7 @@ function seriesStart(event: CalendarEvent): CalendarEvent {
   };
 }
 
-function initialState(occurrence: CalendarEvent | null, defaultDate?: string): FormState {
+function initialState(occurrence: CalendarEvent | null, defaultDate?: string, defaultTime?: string): FormState {
   const event = occurrence && seriesStart(occurrence);
   if (event) {
     const s = splitLocal(event.start_at);
@@ -75,9 +76,9 @@ function initialState(occurrence: CalendarEvent | null, defaultDate?: string): F
     title: "",
     allDay: false,
     startDate: date,
-    startTime: "09:00",
+    startTime: defaultTime ?? "09:00",
     endDate: date,
-    endTime: "10:00",
+    endTime: defaultTime ? plusHour(defaultTime) : "10:00",
     location: "",
     description: "",
     color: "blue",
@@ -87,25 +88,34 @@ function initialState(occurrence: CalendarEvent | null, defaultDate?: string): F
   };
 }
 
+const plusHour = (t: string) => {
+  const h = Number(t.slice(0, 2)) + 1;
+  return h >= 24 ? "23:59" : `${String(h).padStart(2, "0")}${t.slice(2)}`;
+};
+
 export function EventDialog({
   open,
   onOpenChange,
   event,
   defaultDate,
+  defaultTime,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   event: CalendarEvent | null;
   defaultDate?: string;
+  /** "HH:mm" for a new event created by clicking a time slot */
+  defaultTime?: string;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-lg">
         {open && (
           <EventForm
-            key={event ? `${event.id}:${event.updated_at}` : `new:${defaultDate}`}
+            key={event ? `${event.id}:${event.updated_at}` : `new:${defaultDate}:${defaultTime}`}
             event={event}
             defaultDate={defaultDate}
+            defaultTime={defaultTime}
             onClose={() => onOpenChange(false)}
           />
         )}
@@ -117,13 +127,16 @@ export function EventDialog({
 function EventForm({
   event,
   defaultDate,
+  defaultTime,
   onClose,
 }: {
   event: CalendarEvent | null;
   defaultDate?: string;
+  defaultTime?: string;
   onClose: () => void;
 }) {
-  const [form, setForm] = useState<FormState>(() => initialState(event, defaultDate));
+  const colorNames = useColorNames();
+  const [form, setForm] = useState<FormState>(() => initialState(event, defaultDate, defaultTime));
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -275,8 +288,8 @@ function EventForm({
                 <button
                   key={c}
                   type="button"
-                  title={COLOR_LABELS[c]}
-                  aria-label={COLOR_LABELS[c]}
+                  title={colorNames[c]}
+                  aria-label={colorNames[c]}
                   aria-pressed={form.color === c}
                   onClick={() => set("color", c)}
                   className={cn(

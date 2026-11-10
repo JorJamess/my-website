@@ -237,3 +237,31 @@ describe("summary for the Today page", () => {
     expect([...s.overdueTodos, ...s.todosFocus].some((t) => t.parent_id)).toBe(false);
   });
 });
+
+describe("calendar items and colour names", () => {
+  it("lists tasks and milestones due in a range, and ignores subtasks and finished goals", async () => {
+    const t = await repo.createTodo({ title: "Report", due_date: "2026-11-12" });
+    await repo.createTodo({ title: "Sub", parent_id: t.id, due_date: "2026-11-12" });
+    await repo.createTodo({ title: "Later", due_date: "2026-12-30" });
+    const g = await repo.createGoal({ title: "Goal", color: "purple" });
+    await repo.addMilestone(g.id, { title: "Grammar", due_date: "2026-11-13" });
+    const done = await repo.createGoal({ title: "Done goal", status: "done" });
+    await repo.addMilestone(done.id, { title: "Hidden", due_date: "2026-11-13" });
+
+    const c = await repo.getCalendarItems("2026-11-09", "2026-11-15");
+    expect(c.tasks.map((x) => x.title)).toEqual(["Report"]);
+    expect(c.milestones.map((m) => [m.title, m.goal_title, m.color])).toEqual([["Grammar", "Goal", "purple"]]);
+  });
+  it("rejects bad ranges", async () => {
+    await expect(repo.getCalendarItems("nope", "2026-11-15")).rejects.toThrow(repo.InputError);
+    await expect(repo.getCalendarItems("2026-11-15", "2026-11-09")).rejects.toThrow(repo.InputError);
+  });
+  it("renames colours, falls back to defaults, and trims", async () => {
+    expect((await repo.getColorNames()).blue).toBe("Blue");
+    const n = await repo.setColorNames({ blue: "  Study  ", green: "Health" });
+    expect(n.blue).toBe("Study");
+    expect((await repo.getColorNames()).green).toBe("Health");
+    expect((await repo.setColorNames({ blue: "   " })).blue).toBe("Blue");
+    expect((await repo.getColorNames()).green).toBe("Health"); // untouched
+  });
+});

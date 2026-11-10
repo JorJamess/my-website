@@ -307,6 +307,20 @@ export const tools: ToolDef[] = [
 
 tools.push(
   define({
+    name: "get_calendar_items",
+    title: "task ที่ครบกำหนดและ milestone ในช่วงวันที่",
+    description: "สิ่งที่ปรากฏบนปฏิทินนอกจาก event: task ที่มีกำหนดส่งและ milestone ของเป้าหมายในช่วง from–to (รวมวันปลาย YYYY-MM-DD) ใช้คู่กับ list_events เพื่อวางแผนสัปดาห์",
+    schema: z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }),
+    annotations: { readOnlyHint: true },
+    run: async ({ from, to }) => {
+      const c = await repo.getCalendarItems(from, to);
+      return {
+        tasks: c.tasks.map((t) => ({ id: t.id, title: t.title, due_date: t.due_date, done: t.done, priority: TODO_PRIORITIES[t.priority] ?? "none" })),
+        milestones: c.milestones.map((m) => ({ id: m.id, title: m.title, goal: m.goal_title, due_date: m.due_date, done: m.done })),
+      };
+    },
+  }),
+  define({
     name: "get_analytics",
     title: "รีวิวสัปดาห์/เดือน (Analytics)",
     description:
