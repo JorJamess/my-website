@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { clientIp, lockedFor, recordFailure } from "@/lib/server/login-limit";
 import { InputError } from "@/lib/server/repo";
-import { authenticateDevice, type ObsidianDevice } from "@/modules/obsidian/devices";
+import { checkDeviceToken, type ObsidianDevice } from "@/modules/obsidian/devices";
 import { SyncRejected } from "@/modules/obsidian/documents";
 
 type Handler<C> = (req: Request, ctx: C, device: ObsidianDevice) => Promise<Response>;
@@ -16,16 +16,21 @@ type Handler<C> = (req: Request, ctx: C, device: ObsidianDevice) => Promise<Resp
  */
 export function deviceApi<C>(handler: Handler<C>) {
   return async (req: Request, ctx: C): Promise<Response> => {
-    const key = `bridge:${clientIp(req)}`;
-    const wait = await lockedFor(key);
-    if (wait) return NextResponse.json({ error: "too_many_attempts" }, { status: 429, headers: { "Retry-After": String(wait) } });
     const auth = req.headers.get("authorization") ?? "";
     const token = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : null;
-    const device = await authenticateDevice(token);
-    if (!device) {
+    // A valid token is never locked out. Only tokens we never issued count against the per-IP limit, and a token the
+    // owner revoked does not (an old Bridge that keeps polling must not lock out a freshly paired one).
+    const checked = await checkDeviceToken(token);
+    if (!("device" in checked)) {
+      const headers = { "WWW-Authenticate": 'Bearer realm="bridge"' };
+      if (checked.reason === "revoked") return NextResponse.json({ error: "device_revoked" }, { status: 401, headers });
+      const key = `bridge:${clientIp(req)}`;
+      const wait = await lockedFor(key);
+      if (wait) return NextResponse.json({ error: "too_many_attempts" }, { status: 429, headers: { "Retry-After": String(wait) } });
       await recordFailure(key);
-      return NextResponse.json({ error: "unauthorized" }, { status: 401, headers: { "WWW-Authenticate": 'Bearer realm="bridge"' } });
+      return NextResponse.json({ error: "unauthorized" }, { status: 401, headers });
     }
+    const device = checked.device;
     try {
       return await handler(req, ctx, device);
     } catch (err) {

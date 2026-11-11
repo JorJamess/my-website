@@ -65,6 +65,7 @@ export function scanForSecrets(text: string): Finding[] {
   const found: Finding[] = [];
   const seen = new Set<string>();
   const covered: [number, number][] = [];
+  const occurrences = new Map<string, number>();
   const lines = text.split("\n");
   const lineOf = (index: number) => text.slice(0, index).split("\n").length;
   const add = (kind: string, value: string, index: number) => {
@@ -75,8 +76,12 @@ export function scanForSecrets(text: string): Finding[] {
     const key = `${kind}:${line}:${index}`;
     if (seen.has(key)) return;
     seen.add(key);
-    // the fingerprint covers the value but cannot be reversed into it in any useful way
-    found.push({ kind, line, redacted: mask(value), fingerprint: `${kind}:${line}:${fnv(value)}${fnv(value.split("").reverse().join(""))}` });
+    // The fingerprint names this value (not its line, which differs between the whole note and an uploaded chunk) and
+    // which occurrence of it this is; it cannot be reversed into the value in any useful way.
+    const id = `${kind}:${fnv(value)}${fnv(value.split("").reverse().join(""))}`;
+    const n = (occurrences.get(id) ?? 0) + 1;
+    occurrences.set(id, n);
+    found.push({ kind, line, redacted: mask(value), fingerprint: `${id}:${n}` });
   };
 
   for (const rule of RULES) {

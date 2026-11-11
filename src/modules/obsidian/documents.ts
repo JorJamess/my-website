@@ -77,6 +77,21 @@ async function checkGrant(db: D1Database, id: string, grant: number) {
   if (grant !== rev.grant_version) throw new SyncRejected("stale_grant", "This upload used an old permission version.");
 }
 
+/** SQL condition (inside the same statement) that is true only while the document has not been revoked or given a newer grant. */
+const grantOk = (idParam: string, grantParam: string) =>
+  `NOT EXISTS (SELECT 1 FROM obsidian_revocations r WHERE r.document_id = ${idParam} AND (r.state = 'revoked' OR r.grant_version <> ${grantParam}))`;
+
+/**
+ * A revoke can land while an upload is in flight. The writes above are guarded in SQL, and this re-check after each
+ * batch removes anything that slipped in, so a revoked note can never end up searchable again.
+ */
+async function enforceGrant(db: D1Database, id: string, grant: number) {
+  const rev = await db.prepare("SELECT grant_version, state FROM obsidian_revocations WHERE document_id = ?").bind(id).first<{ grant_version: number; state: string }>();
+  if (!rev || (rev.state === "reenabled" && rev.grant_version === grant)) return;
+  await db.batch([...dropChunks(db, id), db.prepare("UPDATE obsidian_documents SET status = 'blocked_revoked', char_count = 0 WHERE id = ? AND status <> 'blocked_revoked'").bind(id)]);
+  throw new SyncRejected(rev.state === "revoked" ? "revoked" : "stale_grant", "This document was revoked in LifeOS while it was uploading. Nothing was kept.");
+}
+
 /** SQL that removes search entries and chunks of a document (all versions, or all but `keepVersion`). */
 function dropChunks(db: D1Database, id: string, keepVersion?: number) {
   const where = keepVersion === undefined ? "document_id = ?1" : "document_id = ?1 AND sync_version <> ?2";
@@ -91,8 +106,9 @@ export async function upload(deviceId: string, input: UploadInput & { part?: num
   const { db } = await ctx();
   if (input.chunks.length > MAX_CHUNKS_PER_REQUEST) throw new SyncRejected("bad_request", `At most ${MAX_CHUNKS_PER_REQUEST} chunks per request`);
   if (input.kind === "note" && input.pdf) throw new SyncRejected("bad_request", "A note can't carry PDF details");
+  let path: string;
   try {
-    validateVaultPath(input.path, { kind: input.kind === "note" ? "note" : "folder" });
+    path = validateVaultPath(input.path, { kind: input.kind === "note" ? "note" : "pdf" });
   } catch (e) {
     throw new SyncRejected("bad_request", e instanceof PathError ? e.message : "Bad path");
   }
@@ -103,13 +119,21 @@ export async function upload(deviceId: string, input: UploadInput & { part?: num
   if (part === 0 && existing && input.sync_version <= existing.sync_version) {
     throw new SyncRejected("stale_version", `A newer version of this document is already stored (version ${existing.sync_version}).`);
   }
-  if (part > 0 && (!existing || existing.pending_version !== input.sync_version)) throw new SyncRejected("stale_version", "This upload is no longer the current one.");
+  // later parts only continue an upload that is still the current one (not deleted, not replaced)
+  if (part > 0 && (!existing || existing.pending_version !== input.sync_version || existing.pending_version <= existing.sync_version || existing.status === "deleted" || existing.status === "blocked_revoked")) {
+    throw new SyncRejected("stale_version", "This upload is no longer the current one.");
+  }
 
-  // Defence in depth: the Mac already scanned. If the Worker still finds a secret, nothing is stored.
+  // Defence in depth: the Mac already scanned. If the Worker still finds a secret that the owner has not approved, nothing is stored.
   const text = `${input.title}\n${input.chunks.map((c) => c.content).join("\n")}`;
-  const findings = scanForSecrets(text);
+  const approved = await db
+    .prepare("SELECT fingerprint FROM obsidian_findings WHERE document_id = ? AND status = 'excepted' AND content_hash = ?")
+    .bind(input.id, input.content_hash)
+    .all<{ fingerprint: string }>();
+  const ok = new Set(approved.results.map((r) => r.fingerprint));
+  const findings = scanForSecrets(text).filter((f) => !ok.has(f.fingerprint));
   if (findings.length) {
-    await blockForSecrets(db, deviceId, input, findings);
+    await blockForSecrets(db, deviceId, { ...input, path }, findings);
     throw new SyncRejected("blocked_secret", `Not stored: ${findings.length} possible secret${findings.length === 1 ? "" : "s"} found (${[...new Set(findings.map((f) => f.kind))].join(", ")}).`);
   }
 
@@ -120,11 +144,13 @@ export async function upload(deviceId: string, input: UploadInput & { part?: num
       db
         .prepare(
           `INSERT INTO obsidian_documents (id, kind, title, path, content_hash, tags, status, grant_version, pending_version, expected_chunks, char_count, source_updated_at, created_at, updated_at, device_id)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'syncing', ?7, ?8, ?9, 0, ?10, ?11, ?11, ?12)
-           ON CONFLICT(id) DO UPDATE SET kind = ?2, title = ?3, path = ?4, content_hash = ?5, tags = ?6, status = 'syncing', grant_version = ?7, pending_version = ?8,
-             expected_chunks = ?9, source_updated_at = ?10, updated_at = ?11, device_id = ?12`,
+           SELECT ?1, ?2, ?3, ?4, ?5, ?6, 'syncing', ?7, ?8, ?9, 0, ?10, ?11, ?11, ?12 WHERE ${grantOk("?1", "?7")}
+           ON CONFLICT(id) DO UPDATE SET kind = ?2, title = ?3, path = ?4, content_hash = ?5, tags = ?6,
+             status = CASE WHEN obsidian_documents.status IN ('synced', 'no_text') THEN obsidian_documents.status ELSE 'syncing' END,
+             grant_version = ?7, pending_version = ?8, expected_chunks = ?9, source_updated_at = ?10, updated_at = ?11, device_id = ?12
+             WHERE obsidian_documents.status <> 'blocked_revoked'`,
         )
-        .bind(input.id, input.kind, input.title.slice(0, 300), input.path, input.content_hash, JSON.stringify(input.tags.slice(0, 50)), input.grant_version, input.sync_version, input.total_chunks, input.source_updated_at ?? null, t, deviceId),
+        .bind(input.id, input.kind, input.title.slice(0, 300), path, input.content_hash, JSON.stringify(input.tags.slice(0, 50)), input.grant_version, input.sync_version, input.total_chunks, input.source_updated_at ?? null, t, deviceId),
     );
     // staged chunks of an abandoned earlier attempt at a different version
     const keep = [existing?.sync_version ?? 0, input.sync_version];
@@ -135,16 +161,18 @@ export async function upload(deviceId: string, input: UploadInput & { part?: num
   }
   for (const c of input.chunks) {
     const content = normalizeText(c.content);
+    const chunkId = `${input.id}:${input.sync_version}:${c.index}`;
     stmts.push(
       // a retried upload replaces the chunk, so its old search entry goes first
-      db.prepare("DELETE FROM obsidian_fts WHERE rowid IN (SELECT rowid FROM obsidian_chunks WHERE id = ?)").bind(`${input.id}:${input.sync_version}:${c.index}`),
+      db.prepare("DELETE FROM obsidian_fts WHERE rowid IN (SELECT rowid FROM obsidian_chunks WHERE id = ?)").bind(chunkId),
       db
-        .prepare("INSERT OR REPLACE INTO obsidian_chunks (id, document_id, sync_version, chunk_index, page, heading, content) VALUES (?, ?, ?, ?, ?, ?, ?)")
-        .bind(`${input.id}:${input.sync_version}:${c.index}`, input.id, input.sync_version, c.index, c.page ?? null, c.heading ?? null, content),
-      db.prepare("INSERT INTO obsidian_fts (rowid, content) SELECT rowid, content FROM obsidian_chunks WHERE id = ?").bind(`${input.id}:${input.sync_version}:${c.index}`),
+        .prepare(`INSERT OR REPLACE INTO obsidian_chunks (id, document_id, sync_version, chunk_index, page, heading, content) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE ${grantOk("?2", "?8")}`)
+        .bind(chunkId, input.id, input.sync_version, c.index, c.page ?? null, c.heading ?? null, content, input.grant_version),
+      db.prepare("INSERT INTO obsidian_fts (rowid, content) SELECT rowid, content FROM obsidian_chunks WHERE id = ?").bind(chunkId),
     );
   }
   await db.batch(stmts);
+  await enforceGrant(db, input.id, input.grant_version);
 
   // commit once every chunk of this version has arrived
   const staged = await db
@@ -155,13 +183,17 @@ export async function upload(deviceId: string, input: UploadInput & { part?: num
   if ((staged?.n ?? 0) < expected) return { id: input.id, status: "syncing" as const, received: staged?.n ?? 0, expected };
 
   const finalStatus: DocStatus = input.kind === "pdf" && input.pdf && input.pdf.state !== "completed" ? (input.pdf.state === "no_text" ? "no_text" : "failed") : expected === 0 && input.kind === "pdf" ? "no_text" : "synced";
+  const oldRefs = input.kind === "note" && input.pdf_refs ? (await db.prepare("SELECT pdf_id FROM obsidian_pdf_refs WHERE note_id = ?").bind(input.id).all<{ pdf_id: string }>()).results.map((r) => r.pdf_id) : [];
   const commit: D1PreparedStatement[] = [
     ...dropChunks(db, input.id, input.sync_version),
     db
-      .prepare("UPDATE obsidian_documents SET sync_version = pending_version, status = ?1, char_count = ?2, synced_at = ?3, updated_at = ?3 WHERE id = ?4")
-      .bind(finalStatus, staged?.chars ?? 0, t, input.id),
-    // the note is clean now: earlier findings no longer apply
-    db.prepare("DELETE FROM obsidian_findings WHERE document_id = ?").bind(input.id),
+      .prepare(
+        `UPDATE obsidian_documents SET sync_version = pending_version, status = ?1, char_count = ?2, synced_at = ?3, updated_at = ?3
+         WHERE id = ?4 AND status NOT IN ('blocked_revoked', 'deleted') AND pending_version = ?5 AND ${grantOk("?4", "?6")}`,
+      )
+      .bind(finalStatus, staged?.chars ?? 0, t, input.id, input.sync_version, input.grant_version),
+    // the note is clean now: open findings no longer apply (approved ones stay, but only for the content they were approved for)
+    db.prepare("DELETE FROM obsidian_findings WHERE document_id = ?1 AND (status = 'open' OR content_hash <> ?2)").bind(input.id, input.content_hash),
   ];
   if (input.kind === "note" && input.pdf_refs) {
     commit.push(db.prepare("DELETE FROM obsidian_pdf_refs WHERE note_id = ?").bind(input.id));
@@ -177,7 +209,10 @@ export async function upload(deviceId: string, input: UploadInput & { part?: num
     );
   }
   await db.batch(commit);
-  if (input.kind === "note") await gcPdfs();
+  await enforceGrant(db, input.id, input.grant_version);
+  // only PDFs this note stopped referencing can become orphans; a PDF that was just uploaded is never touched
+  const kept = new Set(input.pdf_refs ?? []);
+  await gcPdfs(oldRefs.filter((id) => !kept.has(id)));
   await touchSyncState(deviceId, "idle", true);
   return { id: input.id, status: finalStatus, received: staged?.n ?? 0, expected };
 }
@@ -188,8 +223,8 @@ async function blockForSecrets(db: D1Database, deviceId: string, input: UploadIn
     db
       .prepare(
         `INSERT INTO obsidian_documents (id, kind, title, path, content_hash, tags, status, grant_version, created_at, updated_at, device_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, '[]', 'blocked_secret', ?6, ?7, ?7, ?8)
-         ON CONFLICT(id) DO UPDATE SET content_hash = ?5, status = 'blocked_secret', char_count = 0, updated_at = ?7`,
+         SELECT ?1, ?2, ?3, ?4, ?5, '[]', 'blocked_secret', ?6, ?7, ?7, ?8 WHERE ${grantOk("?1", "?6")}
+         ON CONFLICT(id) DO UPDATE SET content_hash = ?5, status = 'blocked_secret', char_count = 0, updated_at = ?7 WHERE obsidian_documents.status <> 'blocked_revoked'`,
       )
       .bind(input.id, input.kind, input.title.slice(0, 300), input.path, input.content_hash, input.grant_version, t, deviceId),
     ...dropChunks(db, input.id),
@@ -205,11 +240,16 @@ type FindingIn = { kind: string; line: number; redacted: string; fingerprint: st
 export async function replaceFindings(documentId: string, contentHash: string, findings: FindingIn[]) {
   const { db } = await ctx();
   const t = now();
-  const stmts = [db.prepare("DELETE FROM obsidian_findings WHERE document_id = ?").bind(documentId)];
+  // owner-approved findings stay while the content is unchanged; everything else is replaced
+  const stmts = [db.prepare("DELETE FROM obsidian_findings WHERE document_id = ?1 AND NOT (status = 'excepted' AND content_hash = ?2)").bind(documentId, contentHash)];
   for (const f of findings.slice(0, 50)) {
     stmts.push(
       db
-        .prepare("INSERT INTO obsidian_findings (id, document_id, content_hash, kind, line, redacted, fingerprint, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .prepare(
+          `INSERT INTO obsidian_findings (id, document_id, content_hash, kind, line, redacted, fingerprint, created_at)
+           SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8
+           WHERE NOT EXISTS (SELECT 1 FROM obsidian_findings WHERE document_id = ?2 AND content_hash = ?3 AND fingerprint = ?7)`,
+        )
         .bind(crypto.randomUUID(), documentId, contentHash, f.kind.slice(0, 40), f.line, f.redacted.slice(0, 12), f.fingerprint.slice(0, 80), t),
     );
   }
@@ -221,15 +261,21 @@ export async function reportBlocked(deviceId: string, input: { id: string; title
   const { db } = await ctx();
   const rev = await db.prepare("SELECT state FROM obsidian_revocations WHERE document_id = ?").bind(input.id).first<{ state: string }>();
   if (rev?.state === "revoked") throw new SyncRejected("revoked", "This document was revoked in LifeOS.");
+  let path: string;
+  try {
+    path = validateVaultPath(input.path, { kind: input.kind === "pdf" ? "pdf" : "note" });
+  } catch (e) {
+    throw new SyncRejected("bad_request", e instanceof PathError ? e.message : "Bad path");
+  }
   const t = now();
   await db.batch([
     db
       .prepare(
         `INSERT INTO obsidian_documents (id, kind, title, path, content_hash, tags, status, created_at, updated_at, device_id)
          VALUES (?1, ?2, ?3, ?4, ?5, '[]', 'blocked_secret', ?6, ?6, ?7)
-         ON CONFLICT(id) DO UPDATE SET title = ?3, path = ?4, content_hash = ?5, status = 'blocked_secret', char_count = 0, updated_at = ?6`,
+         ON CONFLICT(id) DO UPDATE SET title = ?3, path = ?4, content_hash = ?5, status = 'blocked_secret', char_count = 0, updated_at = ?6 WHERE obsidian_documents.status <> 'blocked_revoked'`,
       )
-      .bind(input.id, input.kind ?? "note", input.title.slice(0, 300), input.path, input.content_hash, t, deviceId),
+      .bind(input.id, input.kind ?? "note", input.title.slice(0, 300), path, input.content_hash, t, deviceId),
     ...dropChunks(db, input.id),
   ]);
   await replaceFindings(input.id, input.content_hash, input.findings);
@@ -266,38 +312,61 @@ export async function exceptionsSince(cursor: string) {
 
 /* ------------------------------ Delete / move / revoke ------------------------------ */
 
-/** Remove PDFs that no shared note references any more. */
-export async function gcPdfs() {
+const GC_MIN_AGE_MS = 60 * 60_000;
+
+/**
+ * Remove PDF text that no shared note references any more. Pass the PDFs a note just stopped referencing; those are
+ * the only ones that can have become orphans. Without a list, only PDFs untouched for an hour are considered, so a PDF
+ * that was uploaded a moment before the note that references it is never removed by mistake.
+ */
+export async function gcPdfs(candidates?: string[]) {
   const { db } = await ctx();
-  const { results } = await db
-    .prepare("SELECT id FROM obsidian_documents WHERE kind = 'pdf' AND status NOT IN ('deleted', 'blocked_revoked') AND id NOT IN (SELECT pdf_id FROM obsidian_pdf_refs)")
-    .all<{ id: string }>();
-  for (const { id } of results) {
+  let ids: string[];
+  if (candidates) {
+    if (!candidates.length) return;
+    const marks = candidates.map(() => "?").join(", ");
+    const { results } = await db
+      .prepare(`SELECT id FROM obsidian_documents WHERE kind = 'pdf' AND status IN ('synced', 'no_text', 'failed') AND id IN (${marks}) AND id NOT IN (SELECT pdf_id FROM obsidian_pdf_refs)`)
+      .bind(...candidates)
+      .all<{ id: string }>();
+    ids = results.map((r) => r.id);
+  } else {
+    const { results } = await db
+      .prepare("SELECT id FROM obsidian_documents WHERE kind = 'pdf' AND status IN ('synced', 'no_text', 'failed') AND updated_at < ? AND id NOT IN (SELECT pdf_id FROM obsidian_pdf_refs)")
+      .bind(new Date(Date.now() - GC_MIN_AGE_MS).toISOString())
+      .all<{ id: string }>();
+    ids = results.map((r) => r.id);
+  }
+  for (const id of ids) {
     await db.batch([
       ...dropChunks(db, id),
-      db.prepare("UPDATE obsidian_documents SET status = 'deleted', char_count = 0, updated_at = ? WHERE id = ?").bind(now(), id),
+      db.prepare("UPDATE obsidian_documents SET status = 'deleted', char_count = 0, pending_version = sync_version, updated_at = ? WHERE id = ?").bind(now(), id),
       db.prepare("DELETE FROM obsidian_pdf_documents WHERE document_id = ?").bind(id),
     ]);
   }
 }
 
+const refsOf = async (db: D1Database, noteId: string) => (await db.prepare("SELECT pdf_id FROM obsidian_pdf_refs WHERE note_id = ?").bind(noteId).all<{ pdf_id: string }>()).results.map((r) => r.pdf_id);
+
 /** A note was deleted or moved to the trash on the Mac: remove its copy. No tombstone, the owner did not revoke anything. */
 export async function removeDocument(id: string) {
   const { db } = await ctx();
+  const refs = await refsOf(db, id);
   await db.batch([
     ...dropChunks(db, id),
-    db.prepare("UPDATE obsidian_documents SET status = 'deleted', char_count = 0, updated_at = ? WHERE id = ? AND status <> 'blocked_revoked'").bind(now(), id),
+    // pending_version = sync_version also stops any upload of this note that is still arriving
+    db.prepare("UPDATE obsidian_documents SET status = 'deleted', char_count = 0, pending_version = sync_version, updated_at = ? WHERE id = ? AND status <> 'blocked_revoked'").bind(now(), id),
     db.prepare("DELETE FROM obsidian_pdf_refs WHERE note_id = ?").bind(id),
     db.prepare("DELETE FROM obsidian_findings WHERE document_id = ?").bind(id),
   ]);
-  await gcPdfs();
+  await gcPdfs(refs);
 }
 
 /** The note was renamed or moved on the Mac. Only the stored path and title change. */
 export async function updatePath(id: string, path: string, title?: string) {
   const { db } = await ctx();
   try {
-    validateVaultPath(path, { kind: "note" });
+    path = validateVaultPath(path, { kind: "note" });
   } catch (e) {
     throw new InputError(e instanceof PathError ? e.message : "Bad path");
   }
@@ -318,6 +387,7 @@ export async function revokeDocument(id: string, reason = "owner") {
   const doc = await db.prepare("SELECT grant_version FROM obsidian_documents WHERE id = ?").bind(id).first<{ grant_version: number }>();
   const rev = await db.prepare("SELECT grant_version FROM obsidian_revocations WHERE document_id = ?").bind(id).first<{ grant_version: number }>();
   const version = Math.max(doc?.grant_version ?? 0, rev?.grant_version ?? 0) + 1;
+  const refs = await refsOf(db, id);
   const t = now();
   await db.batch([
     db
@@ -331,7 +401,7 @@ export async function revokeDocument(id: string, reason = "owner") {
     db.prepare("DELETE FROM obsidian_findings WHERE document_id = ?").bind(id),
     db.prepare("DELETE FROM obsidian_pdf_refs WHERE note_id = ?").bind(id),
   ]);
-  await gcPdfs();
+  await gcPdfs(refs);
   await logAudit({ actor: "you", action: "obsidian_revoke", summary: `Revoked cloud access to a note (grant ${version})` });
   return { document_id: id, grant_version: version };
 }
@@ -370,14 +440,19 @@ export async function revocationsSince(cursor: string) {
 export async function reconcileAfterRestore() {
   const { db } = await ctx();
   await setSearchReady(false);
+  // If anything below fails, search deliberately stays closed (safer than serving possibly revoked text).
+  // Run it again with POST /api/obsidian/reconcile; the Obsidian status shows `search_ready: false` meanwhile.
   const { results } = await db.prepare("SELECT document_id FROM obsidian_revocations WHERE state = 'revoked'").all<{ document_id: string }>();
+  const pdfs = new Set<string>();
   for (const { document_id: id } of results) {
+    for (const p of await refsOf(db, id)) pdfs.add(p);
     await db.batch([
       ...dropChunks(db, id),
       db.prepare("UPDATE obsidian_documents SET status = 'blocked_revoked', char_count = 0 WHERE id = ? AND status <> 'blocked_revoked'").bind(id),
       db.prepare("DELETE FROM obsidian_pdf_refs WHERE note_id = ?").bind(id),
     ]);
   }
+  await gcPdfs([...pdfs]);
   await gcPdfs();
   await rebuildSearchIndex();
   await setSearchReady(true);
@@ -494,7 +569,7 @@ export async function searchKnowledge(input: { q: string; kind?: "note" | "pdf";
   }
   if (input.tag) {
     where.push("d.tags LIKE ? ESCAPE '\\'");
-    bind.push(`%${likeEscape(JSON.stringify(input.tag).slice(1, -1))}%`);
+    bind.push(`%${likeEscape(JSON.stringify(input.tag))}%`); // the quotes make it an exact tag, not a substring
   }
   const sql = `SELECT d.id AS document_id, d.title, d.kind, d.path, d.tags, d.updated_at, c.id AS chunk_id, c.chunk_index, c.page, c.heading, c.content
     FROM ${from} WHERE ${where.join(" AND ")} ORDER BY ${order} LIMIT 200`;

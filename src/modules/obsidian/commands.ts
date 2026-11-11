@@ -177,8 +177,16 @@ export async function expireCommands() {
       )
       .bind(t),
     db.prepare("UPDATE obsidian_commands SET status = 'expired', payload_enc = NULL, finished_at = ?1 WHERE status IN ('awaiting_approval', 'approved') AND expires_at < ?1").bind(t),
-    // a claimed command that never reported back and ran out of tries or time
-    db.prepare("UPDATE obsidian_commands SET status = 'failed', payload_enc = NULL, finished_at = ?1, result = 'The Mac did not report a result' WHERE status = 'claimed' AND expires_at < ?1").bind(t),
+    // a claimed command that never reported back and ran out of time or tries: the owner's approval row says so too
+    db
+      .prepare(
+        `UPDATE pending_actions SET status = 'failed', decided_at = ?1, note = 'The Mac never reported a result. Check the note in Obsidian before asking again.'
+         WHERE status = 'approved' AND id IN (SELECT pending_id FROM obsidian_commands WHERE status = 'claimed' AND (expires_at < ?1 OR (attempts >= ?2 AND claimed_at < ?3)))`,
+      )
+      .bind(t, MAX_ATTEMPTS, iso(Date.now() - CLAIM_STALE_MS)),
+    db
+      .prepare("UPDATE obsidian_commands SET status = 'failed', payload_enc = NULL, finished_at = ?1, result = 'The Mac did not report a result' WHERE status = 'claimed' AND (expires_at < ?1 OR (attempts >= ?2 AND claimed_at < ?3))")
+      .bind(t, MAX_ATTEMPTS, iso(Date.now() - CLAIM_STALE_MS)),
     db.prepare("UPDATE obsidian_commands SET payload_enc = NULL WHERE status = 'conflict' AND finished_at < ?").bind(iso(Date.now() - CONFLICT_KEEP_DAYS * 86_400_000)),
     db.prepare("DELETE FROM obsidian_commands WHERE status NOT IN ('awaiting_approval', 'approved', 'claimed') AND COALESCE(finished_at, created_at) < ?").bind(iso(Date.now() - KEEP_FINISHED_DAYS * 86_400_000)),
   ]);
@@ -212,10 +220,15 @@ export async function pollCommands() {
   const { db } = await ctx();
   const t = Date.now();
   const { results } = await db
-    .prepare("SELECT id, op, status, attempts, claimed_at, expires_at, approved_at FROM obsidian_commands WHERE status IN ('approved', 'claimed') AND expires_at > ? ORDER BY approved_at LIMIT 10")
-    .bind(iso(t))
-    .all<Pick<Row, "id" | "op" | "status" | "attempts" | "claimed_at" | "expires_at" | "approved_at">>();
-  return results.filter((c) => c.status === "approved" || (c.attempts < MAX_ATTEMPTS && c.claimed_at && t - Date.parse(c.claimed_at) > CLAIM_STALE_MS)).map((c) => ({ id: c.id, op: c.op, expires_at: c.expires_at }));
+    // eligibility is decided in SQL, so LIMIT 10 only ever counts commands the Mac can actually take
+    .prepare(
+      `SELECT id, op, expires_at FROM obsidian_commands
+       WHERE status IN ('approved', 'claimed') AND expires_at > ?1 AND (status = 'approved' OR (attempts < ?2 AND claimed_at < ?3))
+       ORDER BY approved_at LIMIT 10`,
+    )
+    .bind(iso(t), MAX_ATTEMPTS, iso(t - CLAIM_STALE_MS))
+    .all<{ id: string; op: VaultOp; expires_at: string }>();
+  return results;
 }
 
 /** The Mac takes a command. Only one claim can win, and only before the command expires. Returns the decrypted proposal. */

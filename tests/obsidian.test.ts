@@ -524,3 +524,196 @@ describe("status for the owner", () => {
     expect(new SyncRejected("revoked", "x")).toBeInstanceOf(Error);
   });
 });
+
+describe("code review fixes", () => {
+  const NOTE_WITH_SECRET = 'Setup notes\n\npassword = "hunter2hunter2"\n\nmore text';
+  const secretDoc = (hash: string, extra: Partial<UploadInput> = {}) => doc(1, { content_hash: hash, chunks: [{ index: 0, content: 'Setup notes\n\npassword = "hunter2hunter2"\n\nmore text' }], ...extra });
+
+  it("1. an approved finding lets the same content sync, and only that content", async () => {
+    await expect(upload("dev", secretDoc("hash-a"))).rejects.toMatchObject({ code: "blocked_secret" });
+    const [f] = await listFindings();
+    // the Mac scanned the whole note, so its fingerprint must match what the Worker computes for the uploaded text
+    expect(scanForSecrets(NOTE_WITH_SECRET)[0].fingerprint).toBe(scanForSecrets(`Note 1\n${NOTE_WITH_SECRET}`)[0].fingerprint);
+    expect(await exceptFinding(f.id)).toBe(true);
+    // the Worker keeps the approved finding when the same content is reported blocked again
+    await upload("dev", secretDoc("hash-a", { sync_version: 1 })).then((r) => expect(r.status).toBe("synced"));
+    expect((await listFindings()).filter((x) => x.status === "excepted")).toHaveLength(1);
+    expect((await searchKnowledge({ q: "Setup notes" })).results).toHaveLength(1);
+    // re-uploading the same approved content later still works
+    await upload("dev", secretDoc("hash-a", { sync_version: 2 }));
+    // changed content (new hash): the old approval no longer applies
+    await expect(upload("dev", secretDoc("hash-b", { sync_version: 3 }))).rejects.toMatchObject({ code: "blocked_secret" });
+    expect((await listFindings()).map((x) => x.status)).toEqual(["open"]);
+  });
+  it("1. a second, different secret is still blocked after one was approved", async () => {
+    await expect(upload("dev", secretDoc("hash-a"))).rejects.toMatchObject({ code: "blocked_secret" });
+    await exceptFinding((await listFindings())[0].id);
+    const two = secretDoc("hash-a", { chunks: [{ index: 0, content: 'password = "hunter2hunter2"\napi_key = "zzzzzzzz9999"' }] });
+    await expect(upload("dev", two)).rejects.toMatchObject({ code: "blocked_secret" });
+  });
+
+  const hookBatch = (n: number, fn: () => Promise<unknown>) => {
+    const orig = env.DB.batch.bind(env.DB);
+    let calls = 0;
+    env.DB.batch = (async (stmts: D1PreparedStatement[]) => {
+      calls++;
+      if (calls === n) await fn();
+      return orig(stmts);
+    }) as typeof env.DB.batch;
+  };
+  it("2. a revoke that lands before the upload's writes keeps the note out", async () => {
+    await upload("dev", doc(1));
+    hookBatch(1, () => revokeDocument(ID(1)));
+    await expect(upload("dev", doc(1, { sync_version: 2, chunks: [{ index: 0, content: "late polymorphism text" }] }))).rejects.toMatchObject({ code: "revoked" });
+    expect((await searchKnowledge({ q: "polymorphism" })).results).toEqual([]);
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM obsidian_chunks").first<{ n: number }>())!.n).toBe(0);
+    expect((await env.DB.prepare("SELECT status FROM obsidian_documents").first<{ status: string }>())!.status).toBe("blocked_revoked");
+  });
+  it("2. a revoke between staging and commit keeps the note out", async () => {
+    hookBatch(2, () => revokeDocument(ID(1)));
+    await expect(upload("dev", doc(1))).rejects.toMatchObject({ code: "revoked" });
+    expect((await searchKnowledge({ q: "polymorphism" })).results).toEqual([]);
+    expect(await readDocument(ID(1))).toBeNull();
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM obsidian_fts").first<{ n: number }>())!.n).toBe(0);
+  });
+  it("2. a late part of a deleted or replaced upload is refused", async () => {
+    await upload("dev", { ...doc(1, { total_chunks: 2, chunks: [{ index: 0, content: "first half" }] }), part: 0 });
+    await removeDocument(ID(1));
+    await expect(upload("dev", { ...doc(1, { total_chunks: 2, chunks: [{ index: 1, content: "second half" }] }), part: 1 })).rejects.toMatchObject({ code: "stale_version" });
+    expect((await searchKnowledge({ q: "half" })).results).toEqual([]);
+    await upload("dev", { ...doc(2, { total_chunks: 2, chunks: [{ index: 0, content: "one" }] }), part: 0 });
+    await upload("dev", { ...doc(2, { sync_version: 2, total_chunks: 1 }), part: 0 });
+    await expect(upload("dev", { ...doc(2, { total_chunks: 2, chunks: [{ index: 1, content: "two" }] }), part: 1 })).rejects.toMatchObject({ code: "stale_version" });
+  });
+
+  it("3. the poll cursor lags so a revocation committed just after a read is not skipped", async () => {
+    const { code } = await createPairingCode();
+    const { token } = await completePairing({ code, name: "Mac" });
+    const { GET } = await import("@/app/api/obsidian/bridge/poll/route");
+    const poll = async (since?: string) => {
+      const res = await GET(new Request(`http://x/api/obsidian/bridge/poll${since ? `?rev_since=${encodeURIComponent(since)}` : ""}`, { headers: { authorization: `Bearer ${token}` } }), undefined as never);
+      return (await res.json()) as { now: string; cursor: string; revocations: { document_id: string }[] };
+    };
+    const first = await poll();
+    expect(Date.parse(first.now) - Date.parse(first.cursor)).toBe(60_000);
+    await revokeDocument(ID(1));
+    const second = await poll(first.cursor);
+    expect(second.revocations.map((r) => r.document_id)).toEqual([ID(1)]);
+    // even the cursor from the poll that already delivered it still returns it once more (idempotent for the Bridge)
+    expect((await poll(second.cursor)).revocations.map((r) => r.document_id)).toEqual([ID(1)]);
+  });
+
+  it("4. a revoked device polling does not lock out a freshly paired one", async () => {
+    const h = deviceApi(async () => Response.json({ ok: true }));
+    const call = (token: string) => h(new Request("http://x/", { headers: { authorization: `Bearer ${token}`, "cf-connecting-ip": "7.7.7.7" } }), undefined as never);
+    const a = await completePairing({ code: (await createPairingCode()).code, name: "Old Mac" });
+    await revokeDevice(a.device_id);
+    for (let i = 0; i < 10; i++) expect((await call(a.token)).status).toBe(401);
+    expect(await (await call(a.token)).json()).toEqual({ error: "device_revoked" });
+    const b = await completePairing({ code: (await createPairingCode()).code, name: "New Mac" });
+    expect((await call(b.token)).status).toBe(200);
+  });
+  it("4. a valid token still works from an IP that was locked by wrong tokens", async () => {
+    const h = deviceApi(async () => Response.json({ ok: true }));
+    const call = (token: string) => h(new Request("http://x/", { headers: { authorization: `Bearer ${token}`, "cf-connecting-ip": "6.6.6.6" } }), undefined as never);
+    for (let i = 0; i < 5; i++) await call("never-issued-token-never-issued");
+    expect((await call("never-issued-token-never-issued")).status).toBe(429);
+    const d = await completePairing({ code: (await createPairingCode()).code, name: "Mac" });
+    expect((await call(d.token)).status).toBe(200);
+  });
+
+  const pdfDoc = (id: string) => ({ ...doc(50, { id, kind: "pdf", title: "Lecture", path: "Uni/lecture.pdf", chunks: [{ index: 0, page: 1, content: "Normalization removes redundancy" }] }), pdf: { state: "completed" as const, pages: 1 } });
+  it("5. a PDF uploaded just before its note is not removed by another note's commit", async () => {
+    const pdf = "pdf:" + "c".repeat(32);
+    await upload("dev", pdfDoc(pdf));
+    await upload("dev", doc(2, { pdf_refs: [] })); // another note commits first
+    await upload("dev", doc(3)); // and another without any PDF list
+    expect((await searchKnowledge({ q: "normalization" })).results).toHaveLength(1);
+    await upload("dev", doc(1, { pdf_refs: [pdf] }));
+    expect((await searchKnowledge({ q: "normalization" })).results).toHaveLength(1);
+    // dropping the reference removes the PDF text, and only then
+    await upload("dev", doc(1, { sync_version: 2, pdf_refs: [] }));
+    expect((await searchKnowledge({ q: "normalization" })).results).toEqual([]);
+  });
+  it("5. PDFs that are still syncing or blocked are never garbage collected", async () => {
+    const pdf = "pdf:" + "d".repeat(32);
+    await upload("dev", { ...pdfDoc(pdf), total_chunks: 2, chunks: [{ index: 0, content: "half a pdf" }], part: 0 });
+    await upload("dev", doc(1, { pdf_refs: [pdf] }));
+    await upload("dev", doc(1, { sync_version: 2, pdf_refs: [] }));
+    expect((await env.DB.prepare("SELECT status FROM obsidian_documents WHERE id = ?").bind(pdf).first<{ status: string }>())!.status).toBe("syncing");
+  });
+
+  it("6. a failed reconcile keeps search closed, and running it again recovers", async () => {
+    await upload("dev", doc(1));
+    const orig = env.DB.prepare.bind(env.DB);
+    let fail = true;
+    env.DB.prepare = ((sql: string) => {
+      if (fail && sql === "DELETE FROM obsidian_fts") throw new Error("D1 timeout");
+      return orig(sql);
+    }) as typeof env.DB.prepare;
+    await expect(reconcileAfterRestore()).rejects.toThrow(/timeout/);
+    await expect(searchKnowledge({ q: "polymorphism" })).rejects.toThrow(/rebuilt/);
+    expect((await getObsidianStatus()).search_ready).toBe(false);
+    fail = false;
+    await reconcileAfterRestore();
+    expect((await searchKnowledge({ q: "polymorphism" })).results).toHaveLength(1);
+  });
+
+  it("7. the tag filter matches whole tags only", async () => {
+    await upload("dev", doc(1, { tags: ["javascript"], chunks: [{ index: 0, content: "shared words here" }] }));
+    await upload("dev", doc(2, { tags: ["java"], chunks: [{ index: 0, content: "shared words here" }] }));
+    await upload("dev", doc(3, { tags: ["a\"b%_c"], chunks: [{ index: 0, content: "shared words here" }] }));
+    expect((await searchKnowledge({ q: "shared words", tag: "java" })).results.map((r) => r.title)).toEqual(["Note 2"]);
+    expect((await searchKnowledge({ q: "shared words", tag: "script" })).results).toEqual([]);
+    expect((await searchKnowledge({ q: "shared words", tag: 'a"b%_c' })).results.map((r) => r.title)).toEqual(["Note 3"]);
+    expect((await searchKnowledge({ q: "shared words", tag: "a" })).results).toEqual([]);
+  });
+
+  it("8. busy claimed commands do not hide newer approved ones", async () => {
+    vi.useFakeTimers();
+    const ids: string[] = [];
+    for (let i = 0; i < 11; i++) {
+      const q = await queueVaultProposal({ op: "create_folder", payload: { path: `F${i}` }, summary: `Create folder F${i}` });
+      await approvePending(q.pending_id, "+07:00");
+      ids.push(q.command_id);
+      vi.setSystemTime(Date.now() + 1000);
+    }
+    for (const id of ids.slice(0, 10)) await claimCommand("devA", id); // ten fresh claims
+    const polled = await pollCommands();
+    expect(polled.map((c) => c.id)).toEqual([ids[10]]);
+  });
+  it("8. a command that used all its tries is closed as failed, and the approval row says so", async () => {
+    vi.useFakeTimers();
+    const q = await queueVaultProposal({ op: "delete_note", payload: { path: "a.md" }, summary: "Delete note a.md" });
+    await approvePending(q.pending_id, "+07:00");
+    for (let i = 0; i < 3; i++) {
+      expect(await claimCommand("devA", q.command_id)).not.toBeNull();
+      vi.setSystemTime(Date.now() + 11 * 60_000);
+    }
+    expect(await pollCommands()).toEqual([]);
+    await expireCommands();
+    expect(await env.DB.prepare("SELECT status, payload_enc FROM obsidian_commands WHERE id = ?").bind(q.command_id).first()).toEqual({ status: "failed", payload_enc: null });
+    expect(await repo.getPending(q.pending_id)).toMatchObject({ status: "failed" });
+    expect((await repo.getPending(q.pending_id))!.note).toMatch(/never reported/);
+  });
+
+  it("9. re-uploading a synced note keeps the old copy searchable until the new one is complete", async () => {
+    await upload("dev", doc(1));
+    const r = await upload("dev", { ...doc(1, { sync_version: 2, total_chunks: 2, chunks: [{ index: 0, content: "brand new part one" }] }), part: 0 });
+    expect(r.status).toBe("syncing");
+    expect((await searchKnowledge({ q: "polymorphism" })).results).toHaveLength(1); // old copy still there
+    expect((await searchKnowledge({ q: "brand new" })).results).toEqual([]);
+    await upload("dev", { ...doc(1, { sync_version: 2, total_chunks: 2, chunks: [{ index: 1, content: "part two" }] }), part: 1 });
+    expect((await searchKnowledge({ q: "polymorphism" })).results).toEqual([]);
+    expect((await searchKnowledge({ q: "brand new" })).results).toHaveLength(1);
+  });
+  it("9. paths are stored in NFC, and hidden or trash paths are refused", async () => {
+    const nfd = "Languages/ที่.md".normalize("NFD");
+    await upload("dev", doc(1, { path: nfd }));
+    const stored = (await env.DB.prepare("SELECT path FROM obsidian_documents").first<{ path: string }>())!.path;
+    expect(stored).toBe(nfd.normalize("NFC"));
+    expect(() => validateVaultPath(".trash/x.md", { kind: "note" })).toThrow(/trash/);
+    expect(() => validateVaultPath("a/x.md", { kind: "pdf" })).toThrow(/\.pdf/);
+    await expect(upload("dev", doc(2, { path: ".trash/old.md" }))).rejects.toMatchObject({ code: "bad_request" });
+  });
+});

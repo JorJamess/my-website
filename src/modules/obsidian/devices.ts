@@ -57,19 +57,28 @@ export async function completePairing(input: { code: string; name: string; vault
   return { device_id: id, token };
 }
 
-/** Check a Bridge request's token. Returns the device, or null when unknown or revoked. */
-export async function authenticateDevice(token: string | null | undefined): Promise<ObsidianDevice | null> {
-  if (!token || token.length < 20 || token.length > 200) return null;
+export type DeviceAuth = { device: ObsidianDevice } | { reason: "unknown" | "revoked" };
+
+/** Check a Bridge request's token and say why it failed: a token we never issued, or one the owner revoked. */
+export async function checkDeviceToken(token: string | null | undefined): Promise<DeviceAuth> {
+  if (!token || token.length < 20 || token.length > 200) return { reason: "unknown" };
   const { db } = await ctx();
   const row = await db.prepare("SELECT * FROM obsidian_devices WHERE token_hash = ?").bind(await sha256Hex(token)).first<DeviceRow>();
-  if (!row || row.status !== "active") return null;
+  if (!row) return { reason: "unknown" };
+  if (row.status !== "active") return { reason: "revoked" };
   const seen = row.last_seen_at ? Date.parse(row.last_seen_at) : 0;
   if (Date.now() - seen > LAST_SEEN_EVERY_MS) {
     const now = new Date().toISOString();
     await db.prepare("UPDATE obsidian_devices SET last_seen_at = ? WHERE id = ?").bind(now, row.id).run();
     row.last_seen_at = now;
   }
-  return toDevice(row);
+  return { device: toDevice(row) };
+}
+
+/** The device for a valid token, or null when it is unknown or revoked. */
+export async function authenticateDevice(token: string | null | undefined): Promise<ObsidianDevice | null> {
+  const r = await checkDeviceToken(token);
+  return "device" in r ? r.device : null;
 }
 
 export async function listDevices(): Promise<ObsidianDevice[]> {

@@ -29,8 +29,15 @@ export const POST = api(async (req) => {
     const safety = await saveSnapshot(env.DB, env.BACKUPS, "pre-restore");
     const restored = await restoreSnapshot(env.DB, snap);
     // keep revoked Obsidian notes out: re-apply tombstones, purge anything that came back, rebuild search, then reopen it
-    await reconcileAfterRestore();
-    return NextResponse.json({ ok: true, restored, safety_backup: safety.key });
+    let warning: string | undefined;
+    try {
+      await reconcileAfterRestore();
+    } catch (err) {
+      // the restore itself is done; Obsidian search stays closed until the owner runs POST /api/obsidian/reconcile again
+      console.error("[restore] obsidian reconcile failed", err);
+      warning = "Restored, but the Obsidian search index could not be rebuilt. Search stays closed until you run Reconcile again.";
+    }
+    return NextResponse.json({ ok: true, restored, safety_backup: safety.key, ...(warning ? { warning } : {}) });
   } catch (err) {
     if (err instanceof RestoreError) return NextResponse.json({ error: err.message }, { status: 400 });
     throw err;
