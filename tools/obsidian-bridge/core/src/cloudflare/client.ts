@@ -45,6 +45,8 @@ export type PollResult = {
   cursor: string;
   paused: boolean;
   sync_requested: boolean;
+  /** proposals waiting for the owner to approve in LifeOS */
+  awaiting_approval?: number;
   commands: { id: string; op: string; expires_at: string }[];
   revocations: { document_id: string; grant_version: number; state: "revoked" | "reenabled"; changed_at: string }[];
   exceptions: { document_id: string; fingerprint: string; content_hash: string; excepted_at: string }[];

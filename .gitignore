@@ -62,3 +62,4 @@ tools/**/node_modules
 tools/**/dist
 tools/**/.build
 tools/**/native/bin
+tools/**/build

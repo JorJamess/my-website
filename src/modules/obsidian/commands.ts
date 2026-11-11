@@ -236,6 +236,13 @@ export async function pollCommands() {
   return results;
 }
 
+/** How many proposals wait for the owner's yes (the Menu Bar shows this number). One indexed count. */
+export async function countAwaitingApproval() {
+  const { db } = await ctx();
+  const r = await db.prepare("SELECT COUNT(*) AS n FROM obsidian_commands WHERE status = 'awaiting_approval' AND expires_at > ?").bind(iso(Date.now())).first<{ n: number }>();
+  return r?.n ?? 0;
+}
+
 /** The Mac takes a command. Only one claim can win, and only before the command expires. Returns the decrypted proposal. */
 export async function claimCommand(deviceId: string, id: string) {
   const { db } = await ctx();

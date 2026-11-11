@@ -18,6 +18,7 @@ import { loadState, saveState } from "../sync/state.js";
 import { walkVault } from "../vault/fs-safe.js";
 import { backupCommand, restoreCommand } from "./backup-cmd.js";
 import { MacVolumes } from "../backup/volumes.js";
+import { runWizard, wizardError } from "./wizard.js";
 import { canReadWrite, fileVaultOn, fmtBytes, freeBytes, nodeOk, volumeEncrypted, type Check } from "./system.js";
 
 const VERSION = "0.1.0";
@@ -393,6 +394,16 @@ export async function main(argv: string[]): Promise<number> {
         const res = await new BridgeClient(cfg.lifeosUrl, token).reenable(id);
         out(`Re-enabled (permission version ${res.grant_version}). Start the service to sync it.`);
         return 0;
+      }
+      case "wizard": {
+        // used by the Menu Bar app: one JSON object on stdout
+        try {
+          out(JSON.stringify(await runWizard(words[1] ?? "", flags, { credentials: new MacKeychain(), pdfHelper: helperPath(), version: VERSION })));
+          return 0;
+        } catch (e) {
+          out(JSON.stringify({ error: wizardError(e) }));
+          return 1;
+        }
       }
       case "run":
         rl?.close();

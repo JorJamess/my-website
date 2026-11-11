@@ -45,6 +45,8 @@ export type ServiceStatus = {
   lastSuccessAt?: string;
   lastError?: string | null;
   pendingCommands: number;
+  /** proposals waiting for the owner's approval in LifeOS (as of the last poll) */
+  awaitingApproval: number;
   docs: Record<string, number>;
   pdfs: Record<string, number>;
   usageToday: { requests: number; polls: number };
@@ -74,6 +76,7 @@ export class BridgeService {
   private syncWanted = false;
   private deviceRevoked = false;
   private pendingCommands = 0;
+  private awaitingApproval = 0;
   private lastHeartbeat = 0;
   private lastBeatStatus = "";
   private syncRequestSeen = false;
@@ -177,6 +180,7 @@ export class BridgeService {
       await this.applyPermissionChanges(res);
       this.state.cursors = { rev: res.cursor, exc: res.cursor };
       this.pendingCommands = res.commands.length;
+      this.awaitingApproval = res.awaiting_approval ?? 0;
       if (res.sync_requested) {
         this.syncRequestSeen = true;
         this.requestSync("owner");
@@ -459,6 +463,7 @@ export class BridgeService {
       lastSuccessAt: this.state.lastSuccessAt,
       lastError: this.state.lastError,
       pendingCommands: this.pendingCommands,
+      awaitingApproval: this.awaitingApproval,
       docs: count(this.state.docs),
       pdfs: count(this.state.pdfs),
       usageToday: this.state.usage[day] ?? { requests: 0, polls: 0 },
