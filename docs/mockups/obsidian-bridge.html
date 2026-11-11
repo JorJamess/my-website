@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Obsidian Bridge mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F7F6F2;--fg:#191919;--card:#fff;--muted:#ECEAE3;--mfg:#6B685F;--border:#E4E2DB;
+  --accent:#D9541E;--primary:#191919;--pfg:#fff;--danger:#B4321F;--ok:#2F7D4F;--warn:#B7791F;--r:.5rem;
+}
+:root[data-theme="dark"]{
+  --bg:#141311;--fg:#F2EFE8;--card:#1D1B18;--muted:#26231F;--mfg:#A09A8E;--border:#2E2B26;
+  --primary:#F2EFE8;--pfg:#141311;--ok:#5DBB82;--warn:#E0A94A;--danger:#E5705E;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#141311;--fg:#F2EFE8;--card:#1D1B18;--muted:#26231F;--mfg:#A09A8E;--border:#2E2B26;
+    --primary:#F2EFE8;--pfg:#141311;--ok:#5DBB82;--warn:#E0A94A;--danger:#E5705E;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Hanken Grotesk","Anuphan",system-ui,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:24px 16px 80px}
+h1{font-size:24px;margin:0 0 4px}
+.sub{color:var(--mfg);margin:0 0 20px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:28px}
+.tab,.btn{font:inherit;border:1px solid var(--border);background:var(--card);color:var(--fg);border-radius:var(--r);padding:8px 14px;cursor:pointer}
+.tab[aria-pressed="true"]{background:var(--primary);color:var(--pfg);border-color:var(--primary)}
+.btn.primary{background:var(--primary);color:var(--pfg);border-color:var(--primary)}
+.btn.danger{color:var(--danger);border-color:var(--danger);background:transparent}
+.btn.sm{padding:5px 10px;font-size:13px}
+.btn.accent{background:var(--accent);border-color:var(--accent);color:#fff}
+.spacer{flex:1}
+section.screen{display:none}
+section.screen.on{display:block}
+h2{font-size:18px;font-weight:600;margin:0 0 12px}
+.note{color:var(--mfg);font-size:13px;margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px}
+.grid{display:grid;gap:12px}
+.g2{grid-template-columns:repeat(2,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:760px){.g2,.g4{grid-template-columns:1fr 1fr}}
+@media(max-width:480px){.g2,.g4{grid-template-columns:1fr}}
+.stat .n{font-size:26px;font-weight:600;line-height:1.1}
+.stat .l{font-size:12px;color:var(--mfg);text-transform:uppercase;letter-spacing:.04em}
+.pill{display:inline-block;font-size:12px;padding:2px 8px;border-radius:99px;border:1px solid var(--border);background:var(--muted)}
+.pill.ok{color:var(--ok);border-color:currentColor;background:transparent}
+.pill.warn{color:var(--warn);border-color:currentColor;background:transparent}
+.pill.bad{color:var(--danger);border-color:currentColor;background:transparent}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:6px}
+.dot.warn{background:var(--warn)}.dot.bad{background:var(--danger)}
+.row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--border)}
+.row:first-child{border-top:0}
+.row .t{flex:1;min-width:0}
+.row .t small{display:block;color:var(--mfg)}
+.mono{font-family:ui-monospace,Menlo,monospace;font-size:13px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.stack{display:grid;gap:16px}
+
+/* mac menu bar */
+.mac{background:linear-gradient(160deg,#7d8fa6,#4b5a70);border-radius:14px;padding:0 0 40px;overflow:hidden;min-height:520px;position:relative}
+.menubar{height:26px;background:rgba(255,255,255,.22);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:flex-end;gap:14px;padding:0 14px;color:#fff;font-size:13px}
+.menubar .ico{background:rgba(255,255,255,.35);border-radius:5px;padding:0 6px}
+.popover{position:absolute;right:60px;top:32px;width:320px;background:rgba(245,244,240,.96);color:#191919;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.35);padding:12px;font-size:13px}
+:root[data-theme="dark"] .popover{background:rgba(38,35,31,.97);color:#F2EFE8}
+.popover hr{border:0;border-top:1px solid rgba(128,128,128,.25);margin:8px 0}
+.popover .hd{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px}
+.popover .kv{display:flex;justify-content:space-between;padding:3px 0}
+.popover .kv span:first-child{opacity:.65}
+.mi{padding:6px 8px;border-radius:6px;display:flex;justify-content:space-between}
+.mi:hover{background:var(--accent);color:#fff}
+.mi kbd{opacity:.6;font:inherit}
+@media(max-width:480px){.popover{right:8px;width:calc(100% - 16px)}}
+
+/* wizard */
+.win{max-width:640px;margin:0 auto;background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.win .title{display:flex;gap:6px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--muted)}
+.win .title i{width:11px;height:11px;border-radius:50%;background:#ff5f57}
+.win .title i:nth-child(2){background:#febc2e}.win .title i:nth-child(3){background:#28c840}
+.win .title b{flex:1;text-align:center;font-weight:500;font-size:13px;color:var(--mfg);margin-right:40px}
+.steps{display:flex;gap:4px;padding:14px 20px 0}
+.steps span{height:4px;flex:1;border-radius:2px;background:var(--muted)}
+.steps span.done{background:var(--accent)}
+.win .body{padding:20px}
+.win .foot{display:flex;justify-content:space-between;padding:14px 20px;border-top:1px solid var(--border)}
+.check{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--border)}
+.check:first-of-type{border-top:0}
+.check .ic{width:20px;text-align:center}
+label.ack{display:flex;gap:8px;align-items:flex-start;font-size:14px;margin-top:12px}
+.path{display:flex;gap:8px;align-items:center;border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;background:var(--bg)}
+.path .mono{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar2{height:8px;background:var(--muted);border-radius:4px;overflow:hidden}
+.bar2>i{display:block;height:100%;background:var(--accent)}
+.banner{border:1px solid var(--warn);color:var(--warn);border-radius:var(--r);padding:10px 12px;font-size:14px;display:flex;gap:8px}
+.banner.info{border-color:var(--border);color:var(--mfg)}
+.frame-note{font-size:12px;color:var(--mfg);margin-top:10px}
+.sel{margin-bottom:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Obsidian Bridge — mockups for review</h1>
+  <p class="sub">Three screens: Settings → Obsidian (web), Menu Bar app (macOS), Setup Wizard (macOS). Static mockups, no real data. Use the buttons to switch screen and theme; resize the window to check 390px.</p>
+
+  <div class="bar" role="tablist">
+    <button class="tab" data-s="settings" aria-pressed="true">1 · Settings → Obsidian</button>
+    <button class="tab" data-s="menubar" aria-pressed="false">2 · Menu Bar</button>
+    <button class="tab" data-s="wizard" aria-pressed="false">3 · Setup Wizard</button>
+    <span class="spacer"></span>
+    <button class="tab" id="theme">Toggle dark mode</button>
+  </div>
+
+  <!-- ============ 1. SETTINGS ============ -->
+  <section class="screen on" id="settings">
+    <h2>Settings → Obsidian</h2>
+    <p class="note">A new card group inside the existing Settings page. Same cards, borders and buttons as the rest of LifeOS. No notes editor, only connection, sync control and warnings.</p>
+    <div class="stack">
+
+      <div class="card">
+        <div class="row" style="border:0;padding-top:0">
+          <div class="t"><b>Connection</b><small>Mac “James’s MacBook Air” · Vault “James Knowledge”</small></div>
+          <span class="pill ok"><span class="dot"></span>Connected</span>
+        </div>
+        <div class="grid g4" style="margin-top:8px">
+          <div class="stat"><div class="n">248</div><div class="l">Synced notes</div></div>
+          <div class="stat"><div class="n">31</div><div class="l">PDFs processed</div></div>
+          <div class="stat"><div class="n" style="color:var(--warn)">3</div><div class="l">Blocked</div></div>
+          <div class="stat"><div class="n">2</div><div class="l">Pending for Mac</div></div>
+        </div>
+        <p class="note" style="margin:12px 0 0">Last sync 2 min ago · Last backup today 02:00 · Mac last seen 14 s ago</p>
+        <div class="actions" style="margin-top:12px">
+          <button class="btn primary">Sync now</button>
+          <button class="btn">Pause sync</button>
+          <button class="btn">Open Approvals</button>
+          <button class="btn danger">Revoke this Mac</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row" style="border:0;padding-top:0"><div class="t"><b>Secret warnings</b><small>Notes held back from Claude. Values are never shown.</small></div><span class="pill warn">3 blocked</span></div>
+        <div class="row"><div class="t">Java/Spring config<small>Possible API key · line 14 · <span class="mono">sk-…••••</span></small></div><button class="btn sm">Approve this finding</button></div>
+        <div class="row"><div class="t">Deploy notes<small>Private key block · line 3 · <span class="mono">-----BEGIN ••••</span></small></div><button class="btn sm">Approve this finding</button></div>
+        <div class="row"><div class="t">Server setup<small>Password-like string · line 41 · <span class="mono">pass••••</span></small></div><button class="btn sm">Approve this finding</button></div>
+        <p class="note" style="margin:10px 0 0">An approval covers one finding in the current version of the note. Edit the note and it is scanned again.</p>
+      </div>
+
+      <div class="card">
+        <div class="row" style="border:0;padding-top:0"><div class="t"><b>Synced documents</b><small>Only notes with <span class="mono">lifeos_sync: true</span>. Local-only notes are never listed here.</small></div></div>
+        <div class="row"><div class="t">Java OOP<small class="mono">Programming/Java/Java OOP.md</small></div><span class="pill ok">synced</span><button class="btn sm danger">Revoke</button></div>
+        <div class="row"><div class="t">Database lecture 3 <span class="pill">PDF · 42 pages</span><small class="mono">University/DB/lecture3.pdf</small></div><span class="pill ok">completed</span><button class="btn sm danger">Revoke</button></div>
+        <div class="row"><div class="t">Scanned handout <span class="pill">PDF</span><small class="mono">University/Misc/handout.pdf</small></div><span class="pill warn">no_text</span><button class="btn sm danger">Revoke</button></div>
+        <div class="row"><div class="t">REST API<small class="mono">Programming/Web/REST API.md</small></div><span class="pill warn">conflict</span><button class="btn sm">View diff</button></div>
+        <div class="row"><div class="t">Old credentials note<small class="mono">Archive/old.md</small></div><span class="pill bad">blocked_revoked</span><button class="btn sm">Re-enable…</button></div>
+        <p class="note" style="margin:10px 0 0"><b>Revoke</b> removes the note, its PDF text and search entries from Cloudflare right away and Claude stops seeing it. Cloudflare may keep database history up to 7 days (Time Travel); that cannot be purged on demand.</p>
+      </div>
+
+      <div class="card">
+        <div class="row" style="border:0;padding-top:0"><div class="t"><b>Cloudflare usage (estimate)</b><small>Counts portfolio, LifeOS, MCP and Bridge together</small></div></div>
+        <div class="row"><div class="t">Worker requests today<small>Bridge polling ≈ 5,760 / day at 15 s</small></div><div style="width:45%"><div class="bar2"><i style="width:9%"></i></div><small style="color:var(--mfg)">9,200 / 100,000</small></div></div>
+        <div class="row"><div class="t">D1 storage</div><div style="width:45%"><div class="bar2"><i style="width:6%"></i></div><small style="color:var(--mfg)">31 MB / 500 MB</small></div></div>
+      </div>
+
+      <div class="card">
+        <div class="row" style="border:0;padding-top:0"><div class="t"><b>Pair a Mac</b><small>Pairing code, valid 10 minutes, one use</small></div></div>
+        <div class="path"><span class="mono" style="font-size:20px;letter-spacing:.2em">K7QM-4XD2</span><button class="btn sm">Copy</button></div>
+        <p class="note" style="margin:10px 0 0">On the Mac run <span class="mono">obsidian-bridge pair</span> or use the Menu Bar app, then enter the code.</p>
+      </div>
+    </div>
+    <p class="frame-note">Mobile: the same cards stack to one column; buttons wrap. Approvals page gets a new “Obsidian” group showing the exact path, content preview or diff, and (for folders) synced file names and local-only counts by type.</p>
+  </section>
+
+  <!-- ============ 2. MENU BAR ============ -->
+  <section class="screen" id="menubar">
+    <h2>Menu Bar app</h2>
+    <p class="note">Native SwiftUI popover. Only status and a few actions. All logic stays in the Core service.</p>
+    <div class="mac">
+      <div class="menubar"><span class="ico">◆ Bridge</span><span>Wi-Fi</span><span>Wed 12:40</span></div>
+      <div class="popover">
+        <div class="hd"><span class="dot"></span> Obsidian Bridge <span style="flex:1"></span><span style="font-weight:400;opacity:.6">v0.1</span></div>
+        <div style="opacity:.65;margin:2px 0 8px">Synced · watching “James Knowledge”</div>
+        <div class="kv"><span>Last sync</span><span>2 min ago</span></div>
+        <div class="kv"><span>Pending approvals</span><span>2 waiting for Mac</span></div>
+        <div class="kv"><span>Local backup</span><span>✓ today 02:00</span></div>
+        <div class="kv"><span>External SSD</span><span style="color:var(--warn)">Unavailable</span></div>
+        <hr>
+        <div class="mi">Sync now <kbd>⌘S</kbd></div>
+        <div class="mi">Pause sync</div>
+        <div class="mi">Back up now <kbd>⌘B</kbd></div>
+        <div class="mi">View pending actions…</div>
+        <hr>
+        <div class="mi">Open LifeOS</div>
+        <div class="mi">Open Vault</div>
+        <div class="mi">View logs</div>
+        <div class="mi">Settings…</div>
+        <hr>
+        <div class="mi">Quit (service keeps running)</div>
+      </div>
+    </div>
+    <p class="frame-note">Icon states: normal · paused (dim) · attention (dot) when a conflict, secret warning or failed backup needs you.</p>
+  </section>
+
+  <!-- ============ 3. WIZARD ============ -->
+  <section class="screen" id="wizard">
+    <h2>Setup Wizard</h2>
+    <p class="note">15 steps grouped into 6 screens. Nothing is uploaded until the final confirmation. Showing 3 of the screens.</p>
+    <div class="stack">
+
+      <div class="win">
+        <div class="title"><i></i><i></i><i></i><b>Setup · 1 of 6 · Vault</b></div>
+        <div class="steps"><span class="done"></span><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="body">
+          <h2>Choose your Obsidian Vault</h2>
+          <div class="path"><span class="mono">/Users/…/James Knowledge</span><button class="btn sm">Choose…</button></div>
+          <div class="check" style="margin-top:12px"><span class="ic" style="color:var(--ok)">✓</span>Valid Obsidian Vault (.obsidian found)</div>
+          <div class="check"><span class="ic" style="color:var(--ok)">✓</span>Read and write permission granted</div>
+          <div class="check"><span class="ic" style="color:var(--ok)">✓</span>FileVault is on for this Mac</div>
+        </div>
+        <div class="foot"><button class="btn">Back</button><button class="btn primary">Continue</button></div>
+      </div>
+
+      <div class="win">
+        <div class="title"><i></i><i></i><i></i><b>Setup · 2 of 6 · Backups</b></div>
+        <div class="steps"><span class="done"></span><span class="done"></span><span></span><span></span><span></span><span></span></div>
+        <div class="body">
+          <h2>Where should backups go?</h2>
+          <p class="note" style="margin-bottom:6px">Primary local folder (required)</p>
+          <div class="path"><span class="mono">/Users/…/Backups/James Knowledge</span><button class="btn sm">Choose…</button></div>
+          <div style="margin:8px 0 16px"><div class="bar2"><i style="width:22%"></i></div><small style="color:var(--mfg)">412 GB free · Vault is 1.8 GB</small></div>
+          <p class="note" style="margin-bottom:6px">External SSD (optional)</p>
+          <div class="path"><span class="mono" style="color:var(--mfg)">Not selected — you can add this later</span><button class="btn sm">Choose…</button></div>
+          <div class="banner" style="margin-top:14px"><span>⚠</span><span>The selected folder is on an unencrypted drive. Backups there are not protected if the drive is lost. <br><label class="ack"><input type="checkbox"> I understand and want to continue</label></span></div>
+        </div>
+        <div class="foot"><button class="btn">Back</button><button class="btn primary">Continue</button></div>
+      </div>
+
+      <div class="win">
+        <div class="title"><i></i><i></i><i></i><b>Setup · 5 of 6 · Initial sync preview</b></div>
+        <div class="steps"><span class="done"></span><span class="done"></span><span class="done"></span><span class="done"></span><span class="done"></span><span></span></div>
+        <div class="body">
+          <h2>Review before anything leaves this Mac</h2>
+          <div class="grid g2">
+            <div class="card stat"><div class="n">248</div><div class="l">Notes with lifeos_sync: true</div></div>
+            <div class="card stat"><div class="n">31</div><div class="l">Referenced PDFs</div></div>
+            <div class="card stat"><div class="n">12</div><div class="l">Need a new ID</div></div>
+            <div class="card stat"><div class="n" style="color:var(--warn)">3</div><div class="l">Blocked by secret scan</div></div>
+            <div class="card stat"><div class="n">≈ 9.4 MB</div><div class="l">Text to upload</div></div>
+            <div class="card stat"><div class="n" style="color:var(--danger)">1</div><div class="l">Duplicate ID</div></div>
+          </div>
+          <div class="banner info" style="margin-top:14px"><span>ℹ</span><span>Only notes you marked are included. Images and PDF files stay on this Mac; for PDFs only extracted text is sent. Notes without the flag are not counted by name or content anywhere online.</span></div>
+          <label class="ack"><input type="checkbox"> I have reviewed this list and want to start syncing</label>
+        </div>
+        <div class="foot"><button class="btn">Back</button><button class="btn accent">Enable and sync</button></div>
+      </div>
+    </div>
+    <p class="frame-note">Other screens: Node and dependency checks · LifeOS address and pairing code · final summary. Wizard windows are fixed-width, centered.</p>
+  </section>
+</div>
+<script>
+const tabs=document.querySelectorAll('.tab[data-s]');
+tabs.forEach(b=>b.onclick=()=>{
+  tabs.forEach(x=>x.setAttribute('aria-pressed',x===b));
+  document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===b.dataset.s));
+});
+document.getElementById('theme').onclick=()=>{
+  const r=document.documentElement;
+  const dark=r.dataset.theme==='dark'||(!r.dataset.theme&&matchMedia('(prefers-color-scheme:dark)').matches);
+  r.dataset.theme=dark?'light':'dark';
+};
+</script>
+</body>
+</html>
