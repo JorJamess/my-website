@@ -21,6 +21,7 @@ import * as repo from "@/lib/server/repo";
 import { listMessages, setMessageRead } from "@/lib/server/messages";
 import { getVisitStats } from "@/lib/analytics-core";
 import { getEnv } from "@/lib/server/env";
+import { obsidianTools } from "./obsidian-tools";
 import { addDaysKey, formatLocal, localDateKey } from "@/lib/time";
 import { repeatLabel } from "@/lib/recurrence";
 import { scheduleLabel } from "@/lib/habits";
@@ -798,6 +799,9 @@ tools.push(
     },
   }),
 );
+
+// Obsidian tools: reads see only shared notes; proposals only ever create approval requests
+tools.push(...obsidianTools);
 
 export function toolList() {
   return tools.map((t) => {

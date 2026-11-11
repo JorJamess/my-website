@@ -68,6 +68,7 @@ async function handleOne(msg: JsonRpcRequest): Promise<JsonRpcResponse | null> {
           instructions:
             `ปฏิทินงานและบันทึกส่วนตัวของเจ้าของเว็บไซต์. โซนเวลา ${tz} (วันนี้ ${localDateKey(new Date(), tz)}). ` +
             "เวลาที่ส่งโดยไม่มี offset จะถือเป็นเวลาท้องถิ่น. ใช้ get_summary เพื่อดูภาพรวม, create_event เพื่อลงงาน, create_note เพื่อจดบันทึก. " +
+            "ความรู้ใน Obsidian: ค้นด้วย search_obsidian_knowledge แล้วอ่านด้วย read_obsidian_note / read_obsidian_pdf (เห็นเฉพาะที่เจ้าของแชร์และซิงก์แล้ว ใช้ได้แม้ Mac ปิด และต้องอ้างแหล่งที่มาเสมอ); การสร้าง/แก้/ย้าย/ลบโน้ตและโฟลเดอร์ใช้ propose_* ซึ่งต้องรอเจ้าของอนุมัติและ Mac ออนไลน์. " +
             "กติกาความปลอดภัย: การสร้างและการติ๊กเสร็จทำทันที แต่การลบ การแก้ไขรายการเดิม และการผูก/เลิกผูก จะถูกเข้าคิวรอเจ้าของกดอนุมัติในหน้า Approvals (คุณจะได้ queued:true กลับมา ให้บอกเจ้าของ ไม่ต้องเรียกซ้ำ).",
         },
       };
@@ -86,7 +87,10 @@ async function handleOne(msg: JsonRpcRequest): Promise<JsonRpcResponse | null> {
         // risky changes wait for the owner's yes; everything else runs and is logged
         const risk = riskOf(name, input);
         let result: unknown;
-        if (risk) {
+        if (risk === "vault") {
+          // Obsidian proposals queue themselves (encrypted payload + approval row + audit); nothing runs here
+          result = await tool.run(args as never, tz);
+        } else if (risk) {
           const summary = await describeAction(name, input);
           const pending = await queueAction({ tool: name, args: input, summary, risk });
           await logAudit({ actor: "claude", action: name, summary: `Asked to: ${summary}`, pendingId: pending.id });

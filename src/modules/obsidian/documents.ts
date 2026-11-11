@@ -677,3 +677,31 @@ export async function getObsidianStatus() {
     approvals_configured: !!env.OBSIDIAN_PAYLOAD_KEY,
   };
 }
+
+/* ------------------------------ Lookups for Claude's tools (shared documents only) ------------------------------ */
+
+export type SharedDoc = { id: string; title: string; path: string; kind: "note" | "pdf"; content_hash: string };
+const SHARED = "status IN ('synced', 'no_text')";
+
+/** A shared document at this exact path (case-insensitive, like macOS). Local-only files are never found here. */
+export async function sharedDocByPath(path: string): Promise<SharedDoc | null> {
+  const { db } = await ctx();
+  return db.prepare(`SELECT id, title, path, kind, content_hash FROM obsidian_documents WHERE ${SHARED} AND lower(path) = lower(?) LIMIT 1`).bind(path).first<SharedDoc>();
+}
+
+/** Shared documents inside a folder (at any depth). */
+export async function sharedDocsUnder(folder: string, limit = 200): Promise<SharedDoc[]> {
+  const { db } = await ctx();
+  const { results } = await db
+    .prepare(`SELECT id, title, path, kind, content_hash FROM obsidian_documents WHERE ${SHARED} AND lower(path) LIKE lower(?) ESCAPE '\\' ORDER BY path LIMIT ?`)
+    .bind(`${likeEscape(folder.replace(/\/+$/, ""))}/%`, limit)
+    .all<SharedDoc>();
+  return results;
+}
+
+/** Name of the paired vault, for Obsidian links. */
+export async function pairedVaultName(): Promise<string | null> {
+  const { db } = await ctx();
+  const r = await db.prepare("SELECT vault_name FROM obsidian_devices WHERE status = 'active' ORDER BY paired_at DESC LIMIT 1").first<{ vault_name: string | null }>();
+  return r?.vault_name ?? null;
+}

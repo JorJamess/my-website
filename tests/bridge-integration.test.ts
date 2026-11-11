@@ -29,6 +29,7 @@ import * as repo from "@/lib/server/repo";
 import { createPairingCode, listDevices, revokeDevice } from "@/modules/obsidian/devices";
 import { exceptFinding, listFindings, readDocument, revokeDocument, reenableDocument, searchKnowledge, getObsidianStatus } from "@/modules/obsidian/documents";
 import { queueVaultProposal } from "@/modules/obsidian/commands";
+import { handleMcpPost } from "@/lib/server/mcp/handler";
 import { freshEnv } from "./helpers/env";
 
 const KEY = btoa("0123456789abcdef0123456789abcdef");
@@ -306,6 +307,66 @@ describe("approved changes", () => {
     await svc.pollOnce(); // the saved result is delivered
     expect(await env.DB.prepare("SELECT status FROM obsidian_commands WHERE id = ?").bind(q.command_id).first()).toEqual({ status: "applied" });
     expect(await repo.getPending(q.pending_id)).toMatchObject({ status: "approved" });
+  });
+});
+
+describe("Claude over MCP, start to finish", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function mcp(name: string, args: Record<string, unknown>): Promise<any> {
+    const res = await handleMcpPost(new Request("http://x/api/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) }));
+    const body = (await res.json()) as { result: { content: { text: string }[]; isError?: boolean } };
+    return { isError: !!body.result.isError, ...(JSON.parse(body.result.content[0].text.startsWith("{") ? body.result.content[0].text : "{}") as object), text: body.result.content[0].text };
+  }
+  const approveLatest = async () => {
+    const row = await env.DB.prepare("SELECT id FROM pending_actions WHERE status = 'pending' ORDER BY created_at DESC LIMIT 1").first<{ id: string }>();
+    await approvePending(row!.id, "+07:00");
+  };
+
+  it("edit: read, propose with the hash, approve, the Mac edits, syncs, and Claude reads the new text", async () => {
+    await write("Programming/Java OOP.md", NOTE(ID(1), true, "# Java OOP\nInheritance only.\n"));
+    const { svc } = await pairedService();
+    await svc.syncNow();
+    const found = await mcp("search_obsidian_knowledge", { query: "Inheritance" });
+    const read = await mcp("read_obsidian_note", { id: found.results[0].document_id });
+    expect(read.content).toContain("Inheritance only");
+    const prop = await mcp("propose_edit_note", { path: read.source_path, new_content: "# Java OOP\nInheritance and Polymorphism.\n", expected_hash: read.content_hash });
+    expect(prop.queued).toBe(true);
+    expect(await readFile(join(dir, "Programming/Java OOP.md"), "utf8")).toContain("Inheritance only."); // nothing yet
+    await approveLatest();
+    await svc.pollOnce();
+    expect(await readFile(join(dir, "Programming/Java OOP.md"), "utf8")).toBe(NOTE(ID(1), true, "# Java OOP\nInheritance and Polymorphism.\n"));
+    await svc.syncNow();
+    const after = await mcp("read_obsidian_note", { id: ID(1) });
+    expect(after.content).toContain("Polymorphism");
+    expect(after.content_hash).not.toBe(read.content_hash);
+    // the old hash is no longer accepted
+    expect((await mcp("propose_edit_note", { path: read.source_path, new_content: "x", expected_hash: read.content_hash })).isError).toBe(true);
+  });
+  it("organize: a folder move with local-only files inside moves everything, and the cloud paths follow", async () => {
+    await write("Inbox/Java/a.md", NOTE(ID(1), true, "alpha polymorphism"));
+    await write("Inbox/Java/private.md", "local only, never shared");
+    const { svc } = await pairedService();
+    await svc.syncNow();
+    const prop = await mcp("propose_move_folder", { path: "Inbox/Java", new_path: "Programming/Java" });
+    expect(prop.summary).toMatch(/1 synced notes/);
+    await approveLatest();
+    await svc.pollOnce();
+    expect(await readFile(join(dir, "Programming/Java/private.md"), "utf8")).toBe("local only, never shared");
+    await svc.syncNow();
+    expect((await mcp("search_obsidian_knowledge", { query: "polymorphism" })).results[0].source_path).toBe("Programming/Java/a.md");
+  });
+  it("delete folder: the synced copy disappears from Claude's view and the files sit in the trash", async () => {
+    await write("Old/a.md", NOTE(ID(1), true, "obsolete zebra knowledge"));
+    await write("Old/private.md", "mine");
+    const { svc } = await pairedService();
+    await svc.syncNow();
+    expect((await mcp("propose_delete_folder", { path: "Old" })).queued).toBe(true);
+    await approveLatest();
+    await svc.pollOnce();
+    await expect(readFile(join(dir, "Old/a.md"), "utf8")).rejects.toThrow();
+    expect(await readFile(join(dir, ".trash/Old/private.md"), "utf8")).toBe("mine");
+    await svc.syncNow();
+    expect((await mcp("search_obsidian_knowledge", { query: "zebra" })).results).toEqual([]);
   });
 });
 
