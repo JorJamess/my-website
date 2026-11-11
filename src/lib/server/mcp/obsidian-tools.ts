@@ -46,7 +46,8 @@ async function mustNotExist(p: string) {
   if (await sharedDocByPath(p)) throw new repo.InputError(`มีโน้ตอยู่ที่ ${p} แล้ว ระบบไม่เขียนทับและไม่ตั้งชื่อเลขให้เอง ให้เสนอชื่อหรือโฟลเดอร์อื่น`);
 }
 async function mustHaveShared(f: string) {
-  const docs = await sharedDocsUnder(f);
+  // the owner is shown how many shared notes a folder change affects, so count them all (not just the first page)
+  const docs = await sharedDocsUnder(f, 20_000);
   if (!docs.length) throw new repo.InputError("ไม่พบโน้ตที่ซิงก์ในโฟลเดอร์นี้ (Claude เห็นเฉพาะโฟลเดอร์ที่มีโน้ตที่เจ้าของแชร์)");
   return docs;
 }
@@ -130,7 +131,7 @@ export const obsidianTools: Def[] = [
         updated_at: r.document.updated_at,
         synced_at: r.document.synced_at,
         content_hash: r.document.content_hash,
-        content: r.chunks.map((c) => c.content).join("\n\n"),
+        content: r.chunks.map((c) => c.content).join(""), // chunks are an exact partition of the synced text
         chunks: r.chunks.map((c) => ({ index: c.chunk_index, section: c.heading })),
         total_chunks: r.total_chunks,
         truncated: r.truncated,

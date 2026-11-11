@@ -535,3 +535,86 @@ describe("restore", () => {
 });
 
 void link;
+
+describe("scheduled checks are cheap", () => {
+  class CountingVolumes extends FakeVolumes {
+    infoCalls = 0;
+    findCalls = 0;
+    async info(): Promise<VolumeInfo> {
+      this.infoCalls++;
+      return super.info();
+    }
+    async findByUuid(uuid: string) {
+      this.findCalls++;
+      return super.findByUuid(uuid);
+    }
+  }
+
+  it("once a period is backed up, the every-minute check does no disk or drive work at all", async () => {
+    const { vault, dest } = await setupVault();
+    const volumes = new CountingVolumes();
+    let now = local(2026, 11, 9, 3);
+    const m = new BackupManager({ vaultPath: vault, vaultName: "James Knowledge", settings: { localPath: dest, externalPath: null }, volumes, log: silentLogger, now: () => now });
+    expect(await m.runScheduled()).not.toBeNull();
+    const calls = volumes.infoCalls;
+    for (let i = 0; i < 30; i++) {
+      now = new Date(now.getTime() + 60_000);
+      expect(await m.runScheduled()).toBeNull();
+    }
+    expect(volumes.infoCalls).toBe(calls);
+    // the next night is noticed
+    now = local(2026, 11, 10, 2, 1);
+    expect(await m.runScheduled()).not.toBeNull();
+  });
+  it("an unplugged SSD is looked for every few minutes, not every minute", async () => {
+    const { vault, dest } = await setupVault();
+    const volumes = new CountingVolumes();
+    volumes.mounts.set("SSD-1", null);
+    let now = local(2026, 11, 9, 3);
+    const m = new BackupManager({ vaultPath: vault, vaultName: "James Knowledge", settings: { localPath: dest, externalPath: null, externalVolumeUuid: "SSD-1", externalSubpath: "B" }, volumes, log: silentLogger, now: () => now });
+    await m.runScheduled();
+    const looked = volumes.findCalls;
+    for (let i = 0; i < 4; i++) {
+      now = new Date(now.getTime() + 60_000);
+      await m.runScheduled();
+    }
+    expect(volumes.findCalls).toBe(looked); // not again within 5 minutes
+    const ssd = await tmp("ssd-");
+    volumes.mounts.set("SSD-1", ssd);
+    now = new Date(now.getTime() + 6 * 60_000);
+    const r = await m.runScheduled();
+    expect(r!.map((x) => [x.destination, x.status])).toEqual([["external", "ok"]]);
+    expect(volumes.findCalls).toBeGreaterThan(looked);
+  });
+  it("listing for the schedule uses the small summary, and a snapshot without its manifest is not complete", async () => {
+    const { vault, dest } = await setupVault();
+    const destDir = join(dest, "d");
+    const { manifest } = await createSnapshot(destDir, { vaultPath: vault, vaultName: "J", labels: ["daily"], cycles: { daily: "1" }, mode: "full" });
+    const { listSnapshotSummaries } = await import("../src/backup/store.js");
+    const [s] = await listSnapshotSummaries(destDir);
+    expect(s).toMatchObject({ id: manifest.id, fileCount: manifest.fileCount, labels: ["daily"] });
+    expect("files" in s).toBe(false);
+    expect(JSON.parse(await readFile(join(destDir, "snapshots", manifest.id, "summary.json"), "utf8")).files).toBeUndefined();
+    await rm(join(destDir, "snapshots", manifest.id, "manifest.json"));
+    expect(await listSnapshotSummaries(destDir)).toEqual([]);
+  });
+  it("pruning only old safety backups does not read every file of the scheduled ones", async () => {
+    const { vault, dest } = await setupVault();
+    const destDir = join(dest, "d");
+    const daily = await createSnapshot(destDir, { vaultPath: vault, vaultName: "J", labels: ["daily"], cycles: { daily: "1" }, mode: "full", now: new Date(2026, 0, 1) });
+    for (let i = 0; i < 12; i++) await createSnapshot(destDir, { vaultPath: vault, vaultName: "J", labels: ["safety"], mode: "incremental", now: new Date(2026, 0, 2, 0, i) });
+    // the scheduled snapshot has a file with the right size but unreadable content cannot be told apart by a size check;
+    // what matters: a safety-only prune goes ahead and is not blocked by checks it does not need
+    await truncate(join(destDir, "snapshots", daily.manifest.id, "files/Images/pic.png"), 2); // damaged: size differs
+    const r = await pruneSnapshots(destDir);
+    expect(r.skipped).toBeNull();
+    expect(r.deleted).toHaveLength(2); // the two oldest safety backups
+    // but deleting a scheduled backup does check the ones it keeps (size level)
+    let newest = daily.manifest.id;
+    for (let i = 2; i < 10; i++) newest = (await createSnapshot(destDir, { vaultPath: vault, vaultName: "J", labels: ["daily"], cycles: { daily: String(i) }, mode: "full", now: new Date(2026, 0, 10 + i) })).manifest.id;
+    await truncate(join(destDir, "snapshots", newest, "files/Images/pic.png"), 2); // a snapshot that is being kept is damaged
+    const blocked = await pruneSnapshots(destDir);
+    expect(blocked.deleted).toEqual([]);
+    expect(blocked.skipped).toMatch(/not complete/);
+  });
+});

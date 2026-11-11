@@ -2,12 +2,12 @@ import { constants } from "node:fs";
 import { copyFile, lstat, mkdir, readdir, readFile, readlink, rename, rm, stat, symlink } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { lineDiff } from "../shared/diff.js";
-import { BackupError, hashOf, inside, listSnapshots, snapshotFilesDir, verifySnapshot, type ManifestEntry, type SnapshotManifest } from "./store.js";
+import { BackupError, hashOf, inside, readManifest, snapshotFilesDir, verifySnapshot, type ManifestEntry, type SnapshotManifest } from "./store.js";
 
 export type Resolution = "keep_both" | "keep_current" | "restore_backup";
 
 async function manifestOf(destDir: string, id: string): Promise<SnapshotManifest> {
-  const m = (await listSnapshots(destDir)).find((s) => s.id === id);
+  const m = await readManifest(destDir, id);
   if (!m) throw new BackupError("That backup was not found or is not complete");
   return m;
 }

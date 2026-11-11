@@ -296,3 +296,109 @@ describe.skipIf(!hasNative)("PDF text", () => {
     expect(api.docs.has(ID(1))).toBe(true); // the note itself still syncs
   });
 });
+
+describe("review fixes: removals the owner approved, and no repeated work", () => {
+  const many = async (v: { write: (r: string, t: string) => Promise<void> }, n: number, dir = "Old") => {
+    for (let i = 1; i <= n; i++) await v.write(`${dir}/n${i}.md`, NOTE(ID(i + (dir === "Old" ? 0 : 100)), true, `note ${i}`));
+  };
+
+  it("a folder the owner approved deleting is removed from the cloud even when it is most of the vault", async () => {
+    const { v, api, ctx } = await setup();
+    await many(v, 12);
+    await v.write("Keep/k.md", NOTE(ID(500), true, "keep"));
+    await syncVault(ctx);
+    ctx.state.removalApproved = Object.entries(ctx.state.docs).filter(([, d]) => d.path.startsWith("Old/")).map(([id]) => id);
+    await rm(join(v.dir, "Old"), { recursive: true });
+    const r = await syncVault(ctx);
+    expect(r).toMatchObject({ removed: 12, removalBrake: false });
+    expect([...api.docs.keys()]).toEqual([ID(500)]);
+    expect(ctx.state.removalApproved).toEqual([]);
+    expect(ctx.state.lastError).toBeNull();
+  });
+  it("the brake still stops a mass removal nobody approved, and --allow-removals lifts it for one run", async () => {
+    const { v, api, ctx } = await setup();
+    await many(v, 15);
+    await syncVault(ctx);
+    await rm(join(v.dir, "Old"), { recursive: true });
+    const braked = await syncVault(ctx);
+    expect(braked).toMatchObject({ removalBrake: true, removed: 0 });
+    expect(braked.errors[0]).toMatch(/--allow-removals/);
+    expect(api.docs.size).toBe(15);
+    ctx.allowAllRemovals = true;
+    const forced = await syncVault(ctx);
+    expect(forced).toMatchObject({ removed: 15, removalBrake: false });
+    expect(api.docs.size).toBe(0);
+  });
+  it("approving a few deletions does not unlock the brake for the rest", async () => {
+    const { v, api, ctx } = await setup();
+    await many(v, 15);
+    await syncVault(ctx);
+    const ids = Object.keys(ctx.state.docs);
+    ctx.state.removalApproved = ids.slice(0, 2);
+    await rm(join(v.dir, "Old"), { recursive: true });
+    const r = await syncVault(ctx);
+    expect(r).toMatchObject({ removed: 2, removalBrake: true });
+    expect(api.docs.size).toBe(13);
+  });
+
+  it("a held-back note is not scanned or reported again until its content or approvals change", async () => {
+    const { v, api, ctx } = await setup();
+    const body = 'password = "hunter2hunter2"';
+    await v.write("a.md", NOTE(ID(1), true, body));
+    await syncVault(ctx);
+    expect(api.calls.filter((c) => c.startsWith("blocked:"))).toHaveLength(1);
+    for (let i = 0; i < 3; i++) expect((await syncVault(ctx)).blocked.secret).toBe(1);
+    expect(api.calls.filter((c) => c.startsWith("blocked:"))).toHaveLength(1); // still one report
+    // an approval arrives: it is looked at again and now syncs
+    const { scanForSecrets } = await import("../src/shared/secrets.js");
+    const { sha256 } = await import("../src/vault/scan.js");
+    ctx.state.exceptions.push({ docId: ID(1), fingerprint: scanForSecrets(`a\n${body}`)[0].fingerprint, contentHash: sha256(NOTE(ID(1), true, body)) });
+    await syncVault(ctx);
+    expect(api.docs.has(ID(1))).toBe(true);
+  });
+  it("an unchanged synced note costs no upload and no report", async () => {
+    const { v, api, ctx } = await setup();
+    await v.write("a.md", NOTE(ID(1), true, "fine"));
+    await syncVault(ctx);
+    api.calls.length = 0;
+    await syncVault(ctx);
+    expect(api.calls).toEqual([]);
+  });
+  it("a note that failed is retried at most once an hour", async () => {
+    const { v, api, ctx } = await setup();
+    await v.write("a.md", NOTE(ID(1), true, "x"));
+    const real = api.upload.bind(api);
+    let tries = 0;
+    api.upload = async (b) => {
+      tries++;
+      throw new ApiError(400, "bad_request", "Bad path");
+      void real;
+      void b;
+    };
+    await syncVault(ctx);
+    await syncVault(ctx);
+    await syncVault(ctx);
+    expect(tries).toBe(1);
+    ctx.state.docs[ID(1)].failedAt = new Date(Date.now() - 2 * 3600_000).toISOString();
+    await syncVault(ctx);
+    expect(tries).toBe(2);
+  });
+  it.skipIf(!hasNative)("PDFs that are blocked, corrupt or too large are not hashed or read again while unchanged", async () => {
+    const { v, ctx } = await setup({ pdfMaxBytes: 100_000 });
+    makePdf(join(v.dir, "k.pdf"), "Helvetica", "key AKIAIOSFODNN7EXAMPLE leaked");
+    await writeFile(join(v.dir, "broken.pdf"), "not a pdf");
+    await writeFile(join(v.dir, "huge.pdf"), Buffer.alloc(300_000));
+    await v.write("n.md", NOTE(ID(1), true, "![[k.pdf]] ![[broken.pdf]] ![[huge.pdf]]"));
+    let extracts = 0;
+    const inner = ctx.extractPdf;
+    ctx.extractPdf = async (p) => (extracts++, inner(p));
+    await syncVault(ctx);
+    const first = extracts;
+    expect(first).toBe(2);
+    const r = await syncVault(ctx);
+    await syncVault(ctx);
+    expect(extracts).toBe(first);
+    expect(r.pdfIssues).toMatchObject({ too_large: 1, failed: 1 });
+    expect(r.blocked.secret).toBe(1);
+  });
+});

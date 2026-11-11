@@ -230,3 +230,73 @@ describe("line diff", () => {
     expect(lineDiff(a, b, 3, 1000).length).toBeLessThan(1100);
   });
 });
+
+import { patchBody } from "../src/vault/patch.js";
+import { chunkMarkdown, renderForUpload } from "../src/vault/links.js";
+
+describe("editing keeps what Claude could not see", () => {
+  const viewOf = (body: string) => chunkMarkdown(renderForUpload(body)).map((c) => c.content).join("");
+
+  it("chunks are an exact partition of the synced text, for short and long notes", () => {
+    const long = Array.from({ length: 60 }, (_, i) => `## Section ${i}\n${"word ".repeat(300)}\n\n`).join("");
+    for (const md of ["# A\nshort\n", "no heading\n\n\ntrailing blanks\n\n\n", long, "x".repeat(9000), "# H\n```\n# not a heading\n```\ntext", "line without final newline"]) {
+      expect(chunkMarkdown(md).map((c) => c.content).join(""), md.slice(0, 20)).toBe(md);
+      expect(chunkMarkdown(md).every((c) => c.content.length <= 8000 && c.content.length > 0)).toBe(true);
+    }
+    expect(chunkMarkdown("   \n\n")).toEqual([]);
+  });
+  it("does not rewrite code, and keeps the line count", () => {
+    const md = "Look ![[a.png]]\n```\n![[in-code.png]]\n```\nand `![[inline.png]]` here\n";
+    const out = renderForUpload(md);
+    expect(out).toContain("[Image attachment: a.png — not synchronized]");
+    expect(out).toContain("![[in-code.png]]");
+    expect(out).toContain("`![[inline.png]]`");
+    expect(out.split("\n")).toHaveLength(md.split("\n").length);
+  });
+  it("an edit elsewhere in the note leaves embedded images and attachments in place", async () => {
+    const { v, run } = await setup();
+    const body = "# Java OOP\n\n![[diagram.png]]\n![photo](img/a%20b.jpg)\n\nInheritance only.\n\n![[song.mp3]]\n";
+    const text = NOTE(ID(1), true, body);
+    await v.write("n.md", text);
+    // Claude read the synced view and proposes a new one with an added paragraph
+    const proposed = viewOf(body).replace("Inheritance only.", "Inheritance and Polymorphism.\n\nA new paragraph.");
+    const r = await run("edit_note", { path: "n.md", new_content: proposed, expected_hash: sha256(text) });
+    expect(r.status).toBe("applied");
+    const after = await readFile(join(v.dir, "n.md"), "utf8");
+    expect(after).toBe(NOTE(ID(1), true, "# Java OOP\n\n![[diagram.png]]\n![photo](img/a%20b.jpg)\n\nInheritance and Polymorphism.\n\nA new paragraph.\n\n![[song.mp3]]\n"));
+  });
+  it("a long note edited near the end keeps its images too (chunk joins do not leak into the file)", () => {
+    const body = "![[top.png]]\n" + Array.from({ length: 40 }, (_, i) => `## S${i}\n${"word ".repeat(250)}\n`).join("") + "last line\n";
+    const proposed = viewOf(body).replace("last line", "last line changed");
+    const out = patchBody(body, proposed)!;
+    expect(out).toBe(body.replace("last line", "last line changed"));
+  });
+  it("a placeholder kept on a line Claude edited turns back into the original embed", () => {
+    const body = "Intro ![[diagram.png]] text\nsecond\n";
+    const proposed = "Intro [Image attachment: diagram.png — not synchronized] text, reworded\nsecond\n";
+    expect(patchBody(body, proposed)).toBe("Intro ![[diagram.png]] text, reworded\nsecond\n");
+  });
+  it("removing the placeholder line removes the embed (that is what Claude asked for)", () => {
+    expect(patchBody("a\n![[x.png]]\nb\n", "a\nb\n")).toBe("a\nb\n");
+  });
+  it("keeps Windows line endings", () => {
+    const body = "# T\r\n![[x.png]]\r\ntext\r\n";
+    expect(patchBody(body, "# T\n[Image attachment: x.png — not synchronized]\ntext\nmore\n")).toBe("# T\r\n![[x.png]]\r\ntext\r\nmore\r\n");
+  });
+  it("refuses a change it cannot compare safely", () => {
+    const a = Array.from({ length: 2500 }, (_, i) => `a${i}`).join("\n");
+    const b = Array.from({ length: 2500 }, (_, i) => `b${i}`).join("\n");
+    expect(patchBody(a, b)).toBeNull();
+  });
+  it("the conflict diff is against what Claude saw, so it never claims an image changed", async () => {
+    const { v, run } = await setup();
+    const body = "keep ![[x.png]]\nline\n";
+    const text = NOTE(ID(1), true, body);
+    await v.write("n.md", text);
+    await writeFile(join(v.dir, "n.md"), NOTE(ID(1), true, "keep ![[x.png]]\nline EDITED\n"));
+    const r = await run("edit_note", { path: "n.md", new_content: "keep [Image attachment: x.png — not synchronized]\nline\nmore\n", expected_hash: sha256(text) });
+    expect(r.status).toBe("conflict");
+    expect(String(r.conflict!.diff)).not.toContain("![[x.png]]\n+");
+    expect(String(r.conflict!.diff)).toContain("-line EDITED");
+  });
+});

@@ -28,7 +28,8 @@ Claude (web / mobile)
 - **PDFs** referenced from a shared note (`![[x.pdf]]`, `[[x.pdf]]`, `[t](./x.pdf)`) have their selectable text extracted on the Mac with Apple PDFKit and sent as page-numbered chunks. Original PDFs stay in the vault. Over 100 MB: skipped (`too_large`). No selectable text: `no_text`. **There is no OCR in this version.** Thai, English and Japanese were tested with generated PDFs; real-world PDFs can extract worse than test files.
 - The first sync is never silent: setup shows a numbers-only preview and needs your confirmation.
 - After that the Bridge watches the vault (debounced), re-checks at startup, after sleep and every 10 minutes, and uploads only what changed (hash based). Moves/renames are detected by id and only update the path.
-- Safety brake: if more than half of the synced notes (and more than 10) look gone at once, nothing is removed from the cloud (a missing drive must not wipe the copy).
+- Safety brake: if more than half of the synced notes (and more than 10) look gone at once, nothing is removed from the cloud (a missing drive must not wipe the copy). Notes you approved deleting in LifeOS are always removed; for anything else run `obsidian-bridge sync --allow-removals`.
+- A held-back or failed note, PDF or unchanged file is not scanned, reported or read again until its content or your approvals change (failed ones are retried at most hourly), so the Mac does not waste Cloudflare requests.
 
 ## Secrets
 Before anything leaves the Mac the text (notes, PDF text, Claude-written notes) is scanned: known key formats, private keys, `password = ...` style assignments and long random-looking strings. A hit holds that note back (`blocked_secret`), shows it masked in LifeOS (type, line, first 4 characters), and keeps it local. You can approve **one finding at a time**; an approval is bound to the exact content and disappears when the note changes. The Worker scans again on upload and on proposals as a second line of defence.
@@ -51,6 +52,7 @@ LifeOS makes a one-time code (8 characters, 10 minutes, stored hashed, wrong gue
 - Never overwrites. A taken destination is rejected and Claude has to propose another name; no numbered names are invented.
 - **Conflicts:** if the note changed after the proposal (even while the Mac was offline for days) the Mac stops, keeps your version, reports the diff and the approval needs to be asked for again.
 - Deletes move to the vault's `.trash`; nothing is removed permanently.
+- **Edits keep what Claude could not see.** Claude reads the synced view of a note (images and attachments shown as placeholders, one line per line of the note). The Mac applies only the lines Claude changed to the real note, so embedded images and attachments stay, and a placeholder Claude kept on an edited line turns back into the original embed. If the change is too large to compare safely it is refused. The diff you review is against what Claude saw.
 - Claude can only target notes and folders that contain a synced note. Anything else looks like it does not exist.
 - A result that could not be delivered is stored and resent; a command is never run twice.
 - Folder deletes: LifeOS shows the synced notes and PDFs that are affected. **The number of local-only files inside the folder is not shown before approval** (only the Mac knows it). The approval says that unshared files inside move too, and the Mac reports the counts by type after applying. Local-only file names are never sent.
@@ -100,7 +102,7 @@ Only you can do these; I did none of them.
 - The login item is a user LaunchAgent (`~/Library/LaunchAgents/com.jameswebpupu.obsidian-bridge.plist`), installed only when you confirm. No root, no shell-config changes.
 
 ## Command line
-`obsidian-bridge setup | status | doctor | sync | pause | resume | backup [list] | restore preview|--new-vault|--merge | logs | pair | unpair | reenable <id> | run | version`, each with `help <command>`. The menu bar app and the CLI both use the same service.
+`obsidian-bridge setup | status | doctor | sync [--allow-removals] | pause | resume | backup [list] | restore preview|--new-vault|--merge | logs | pair | unpair | reenable <id> | run | version`, each with `help <command>`. The menu bar app and the CLI both use the same service.
 
 ## Troubleshooting
 | Symptom | What to check |
@@ -113,6 +115,8 @@ Only you can do these; I did none of them.
 | A PDF shows "no text" | It is image-only. OCR is not supported. |
 | An approval says "Needs a look" | The note changed after you approved (conflict), the backup failed, or it expired. Ask Claude again. |
 | Edits/deletes are refused | The local backup folder isn't writable or isn't set. Run `obsidian-bridge doctor`. |
+| Deleted notes are still found by Claude | The mass-removal safety brake stopped it. Run `obsidian-bridge sync --allow-removals`. |
+| "The Bridge is already running" | Only one Bridge can run per user. Use the menu bar app or `obsidian-bridge status`; stop it before starting another. |
 | Search says it is being rebuilt | After a restore. Run Reconcile (`POST /api/obsidian/reconcile`). |
 | Cloudflare quota errors | The Bridge retries with backoff. Check usage; the poll interval can be raised in `config.json` (`pollSeconds`). |
 

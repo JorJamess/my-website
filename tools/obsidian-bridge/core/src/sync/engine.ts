@@ -45,7 +45,13 @@ export type SyncContext = {
   log: Logger;
   /** called after each document so progress survives a crash */
   persist?: () => Promise<void>;
+  /** the owner asked for it explicitly (`sync --allow-removals`): skip the mass-removal safety brake for this run */
+  allowAllRemovals?: boolean;
 };
+
+/** a failed document or PDF is tried again at most this often */
+const RETRY_MS = 60 * 60_000;
+const recent = (iso?: string) => !!iso && Date.now() - Date.parse(iso) < RETRY_MS;
 
 const fingerprintsFor = (state: BridgeState, docId: string, hash: string) => new Set(state.exceptions.filter((e) => e.docId === docId && e.contentHash === hash).map((e) => e.fingerprint));
 const findingsOf = (text: string, ok: Set<string>): Finding[] => scanForSecrets(text).filter((f) => !ok.has(f.fingerprint));
@@ -131,7 +137,22 @@ async function syncPdf(ctx: SyncContext, pdf: ResolvedPdf, report: SyncReport): 
     return null;
   }
   const prev = state.pdfs[pdf.rel];
-  if (prev && prev.size === pdf.size && prev.mtimeMs === pdf.mtimeMs && (prev.status === "synced" || prev.status === "no_text")) return prev.id;
+  if (prev && prev.size === pdf.size && prev.mtimeMs === pdf.mtimeMs) {
+    // nothing about the file changed: don't hash, extract or report it again
+    if (prev.status === "synced" || prev.status === "no_text") return prev.id;
+    if (prev.status === "failed" && prev.message === "too large") {
+      report.pdfIssues.too_large++;
+      return null;
+    }
+    if (prev.status === "blocked_secret" && (prev.exceptionCount ?? 0) === fingerprintsFor(state, prev.id, prev.hash).size) {
+      report.blocked.secret++;
+      return null;
+    }
+    if (prev.status === "failed" && recent(prev.failedAt)) {
+      report.pdfIssues.failed++;
+      return null;
+    }
+  }
   const title = pdf.rel.slice(pdf.rel.lastIndexOf("/") + 1);
 
   if (pdf.status === "too_large") {
@@ -139,7 +160,7 @@ async function syncPdf(ctx: SyncContext, pdf: ResolvedPdf, report: SyncReport): 
     if (!(prev && prev.id === id && prev.status === "failed")) {
       const grant = ctx.state.grants[id] ?? 0;
       const version = (prev?.id === id ? prev.syncVersion : 0) + 1;
-      await uploadParts(ctx, { id, kind: "pdf", title, path: pdf.rel, content_hash: sha256(`${pdf.rel}:${pdf.size}`), tags: [], grant_version: grant, sync_version: version, pdf: { state: "too_large", size_bytes: pdf.size, message: `Larger than ${Math.round(cfg.pdfMaxBytes / 1024 / 1024)} MB` } }, [], (v) => (state.pdfs[pdf.rel!] = { id, size: pdf.size, mtimeMs: pdf.mtimeMs, hash: "", syncVersion: v, status: "failed", message: "too large" }));
+      await uploadParts(ctx, { id, kind: "pdf", title, path: pdf.rel, content_hash: sha256(`${pdf.rel}:${pdf.size}`), tags: [], grant_version: grant, sync_version: version, pdf: { state: "too_large", size_bytes: pdf.size, message: `Larger than ${Math.round(cfg.pdfMaxBytes / 1024 / 1024)} MB` } }, [], (v) => (state.pdfs[pdf.rel!] = { id, size: pdf.size, mtimeMs: pdf.mtimeMs, hash: "", syncVersion: v, status: "failed", message: "too large", failedAt: new Date().toISOString() }));
     }
     report.pdfIssues.too_large++;
     return null;
@@ -158,20 +179,20 @@ async function syncPdf(ctx: SyncContext, pdf: ResolvedPdf, report: SyncReport): 
   const base = { id, kind: "pdf" as const, title, path: pdf.rel, content_hash: hash, tags: [], grant_version: grant, sync_version: version, source_updated_at: new Date(pdf.mtimeMs).toISOString() };
 
   if (res.state !== "completed") {
-    await uploadParts(ctx, { ...base, pdf: { state: res.state, size_bytes: res.sizeBytes, pages: res.pages, message: res.message } }, [], (v) => (state.pdfs[pdf.rel!] = { id, size: pdf.size, mtimeMs: pdf.mtimeMs, hash, syncVersion: v, status: res.state === "no_text" ? "no_text" : "failed", pages: res.pages, message: res.message }));
+    await uploadParts(ctx, { ...base, pdf: { state: res.state, size_bytes: res.sizeBytes, pages: res.pages, message: res.message } }, [], (v) => (state.pdfs[pdf.rel!] = { id, size: pdf.size, mtimeMs: pdf.mtimeMs, hash, syncVersion: v, status: res.state === "no_text" ? "no_text" : "failed", pages: res.pages, message: res.message, failedAt: new Date().toISOString() }));
     report.pdfIssues[res.state === "no_text" ? "no_text" : res.state === "too_large" ? "too_large" : "failed"]++;
     return res.state === "no_text" ? id : null;
   }
   const chunks = pdfChunks(res.content).map((c, index) => ({ index, ...c }));
   if (chunks.length > MAX_TOTAL_CHUNKS) {
-    state.pdfs[pdf.rel] = { id, size: pdf.size, mtimeMs: pdf.mtimeMs, hash, syncVersion: prev?.syncVersion ?? 0, status: "failed", message: "Too much text" };
+    state.pdfs[pdf.rel] = { id, size: pdf.size, mtimeMs: pdf.mtimeMs, hash, syncVersion: prev?.syncVersion ?? 0, status: "failed", message: "Too much text", failedAt: new Date().toISOString() };
     report.pdfIssues.failed++;
     return null;
   }
   const findings = findingsOf(res.content.map((p) => p.text).join("\n"), fingerprintsFor(state, id, hash));
   if (findings.length) {
     await api.reportBlocked({ id, title, path: pdf.rel, content_hash: hash, kind: "pdf", findings });
-    state.pdfs[pdf.rel] = { id, size: pdf.size, mtimeMs: pdf.mtimeMs, hash, syncVersion: prev?.syncVersion ?? 0, status: "blocked_secret" };
+    state.pdfs[pdf.rel] = { id, size: pdf.size, mtimeMs: pdf.mtimeMs, hash, syncVersion: prev?.syncVersion ?? 0, status: "blocked_secret", exceptionCount: fingerprintsFor(state, id, hash).size };
     report.blocked.secret++;
     return null;
   }
@@ -221,11 +242,21 @@ export async function syncVault(ctx: SyncContext): Promise<SyncReport> {
       report.blocked.revoked++;
       continue;
     }
+    const before = state.docs[id];
+    const excCount = fingerprintsFor(state, id, note.hash).size;
+    // nothing new to learn about a note that is held back or failed with the same content: don't scan or report it again
+    if (before?.hash === note.hash && before.status === "blocked_secret" && (before.exceptionCount ?? 0) === excCount) {
+      report.blocked.secret++;
+      continue;
+    }
+    if (before?.hash === note.hash && before.status === "failed" && recent(before.failedAt)) continue;
     try {
-      const findings = findingsOf(`${note.title}\n${note.rendered}`, fingerprintsFor(state, id, note.hash));
+      // a note that is already synced and unchanged was scanned when it was uploaded
+      const alreadyClean = before?.status === "synced" && before.hash === note.hash;
+      const findings = alreadyClean ? [] : findingsOf(`${note.title}\n${note.rendered}`, fingerprintsFor(state, id, note.hash));
       if (findings.length) {
         await api.reportBlocked({ id, title: note.title, path: note.rel, content_hash: note.hash, kind: "note", findings });
-        state.docs[id] = { path: note.rel, hash: note.hash, syncVersion: state.docs[id]?.syncVersion ?? 0, status: "blocked_secret", refsKey: "" };
+        state.docs[id] = { path: note.rel, hash: note.hash, syncVersion: state.docs[id]?.syncVersion ?? 0, status: "blocked_secret", refsKey: "", exceptionCount: excCount };
         report.blocked.secret++;
         continue;
       }
@@ -261,13 +292,13 @@ export async function syncVault(ctx: SyncContext): Promise<SyncReport> {
         await markRevoked(ctx, note, state.grants[id] ?? 0);
         report.blocked.revoked++;
       } else if (e instanceof ApiError && e.code === "blocked_secret") {
-        state.docs[id] = { path: note.rel, hash: note.hash, syncVersion: state.docs[id]?.syncVersion ?? 0, status: "blocked_secret", refsKey: "" };
+        state.docs[id] = { path: note.rel, hash: note.hash, syncVersion: state.docs[id]?.syncVersion ?? 0, status: "blocked_secret", refsKey: "", exceptionCount: excCount };
         report.blocked.secret++;
       } else if (e instanceof ApiError && e.transient) {
         throw e; // network, rate limit or quota: stop this pass and retry later with backoff
       } else {
         const msg = e instanceof Error ? e.message : String(e);
-        state.docs[id] = { path: note.rel, hash: note.hash, syncVersion: state.docs[id]?.syncVersion ?? 0, status: "failed", refsKey: "", message: msg.slice(0, 200) };
+        state.docs[id] = { path: note.rel, hash: note.hash, syncVersion: state.docs[id]?.syncVersion ?? 0, status: "failed", refsKey: "", message: msg.slice(0, 200), failedAt: new Date().toISOString() };
         report.errors.push(`${note.rel}: ${msg}`);
         log.warn("note not synced", { path: note.rel, error: msg });
       }
@@ -278,15 +309,22 @@ export async function syncVault(ctx: SyncContext): Promise<SyncReport> {
   // notes that are gone, moved to the trash, or no longer shared
   const gone = Object.entries(state.docs).filter(([id, d]) => !protectedIds.has(id) && d.status !== "blocked_revoked" && state.revoked[id] === undefined).map(([id]) => id);
   const total = Object.keys(state.docs).length;
-  if (scan.counts.unreadable > 0 && gone.length) {
+  // notes the owner approved deleting are removed no matter how many; the brake only guards against everything else
+  const approved = new Set(state.removalApproved);
+  const goneApproved = gone.filter((id) => approved.has(id));
+  const goneOther = gone.filter((id) => !approved.has(id));
+  state.removalApproved = state.removalApproved.filter((id) => !protectedIds.has(id) && state.docs[id] !== undefined && !goneApproved.includes(id));
+  let toRemove = goneApproved;
+  if (scan.counts.unreadable > 0 && goneOther.length) {
     report.errors.push("Some files could not be read, so nothing was removed from the cloud this time");
-  } else if (gone.length > Math.max(10, Math.floor(total / 2))) {
+  } else if (!ctx.allowAllRemovals && goneOther.length > Math.max(10, Math.floor(total / 2))) {
     // safety brake: a missing drive or a moved vault must not wipe the cloud copy
     report.removalBrake = true;
-    report.errors.push(`${gone.length} of ${total} synced notes look gone. Nothing was removed; check the vault location, then run a sync again.`);
-    log.warn("removal brake", { gone: gone.length, total });
-  } else {
-    for (const id of gone) {
+    report.errors.push(`${goneOther.length} of ${total} synced notes look gone. Nothing was removed; if you deleted them on purpose run: obsidian-bridge sync --allow-removals`);
+    log.warn("removal brake", { gone: goneOther.length, total });
+  } else toRemove = gone;
+  {
+    for (const id of toRemove) {
       try {
         await api.removeDocument(id);
         delete state.docs[id];

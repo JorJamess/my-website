@@ -4,12 +4,13 @@ import { existsSync } from "node:fs";
 import { relative, isAbsolute, resolve } from "node:path";
 import { hostname } from "node:os";
 import { MacVolumes } from "../backup/volumes.js";
-import { BridgeClient, ApiError, type FetchLike } from "../cloudflare/client.js";
-import { ConfigError, isVault, loadConfig, paths, saveConfig, type BridgeConfig } from "../config/config.js";
+import { ApiError, type FetchLike } from "../cloudflare/client.js";
+import { ConfigError, isVault, loadConfig, paths, saveConfig } from "../config/config.js";
 import type { CredentialStore } from "../security/keychain.js";
 import { callService } from "../service/ipc.js";
 import { previewInitialSync } from "../sync/preview.js";
 import { walkVault } from "../vault/fs-safe.js";
+import { pairAndSave } from "./pairing.js";
 import { canReadWrite, fileVaultOn, freeBytes, nodeOk, volumeEncrypted } from "./system.js";
 
 export type WizardDeps = { credentials: CredentialStore; fetch?: FetchLike; pdfHelper: string; version: string };
@@ -65,43 +66,18 @@ export async function runWizard(step: string, flags: WizardFlags, deps: WizardDe
       return { path: p, available: rw, writable: rw, volumeUuid: info?.uuid ?? null, volumeName: info?.name ?? null, encrypted: info?.encrypted ?? null, freeBytes: rw ? await freeBytes(p) : null };
     }
     case "pair": {
-      const url = need(flags, "url").replace(/\/+$/, "");
-      const vault = resolve(need(flags, "vault"));
-      const backup = resolve(need(flags, "backup"));
-      const ext = str(flags, "external") ? resolve(str(flags, "external")!) : null;
-      if (!(await isVault(vault))) throw new Error("That folder is not an Obsidian vault");
-      const info = ext ? await new MacVolumes().info(ext) : null;
-      const name = str(flags, "name") ?? hostname();
       const prev = await loadConfig().catch(() => null);
-      const vaultName = vault.split("/").pop() ?? "Vault";
-      let deviceId = prev?.deviceId;
-      if (!deviceId || !(await deps.credentials.get(deviceId)) || flags.code) {
-        const res = await BridgeClient.pair(url, { code: need(flags, "code"), name, vault_name: vaultName, version: deps.version }, deps.fetch);
-        if (deviceId) await deps.credentials.delete(deviceId);
-        await deps.credentials.set(res.device_id, res.token);
-        deviceId = res.device_id;
-      }
-      const cfg: BridgeConfig = {
-        version: 1,
-        lifeosUrl: url,
-        vaultPath: vault,
-        vaultName,
-        deviceName: name,
-        deviceId,
-        backup: {
-          localPath: backup,
-          externalPath: ext,
-          externalVolumeUuid: info?.uuid ?? null,
-          externalSubpath: info?.mountPoint && ext ? relative(info.mountPoint, ext) : null,
-          allowUnencrypted: flags["allow-unencrypted"] === true,
-        },
-        trashFolder: prev?.trashFolder ?? ".trash",
-        pollSeconds: prev?.pollSeconds ?? 15,
-        pdfMaxBytes: prev?.pdfMaxBytes ?? 100 * 1024 * 1024,
-        initialSyncConfirmedAt: prev?.initialSyncConfirmedAt,
-      };
-      await saveConfig(cfg);
-      return { paired: true, deviceId, vaultName };
+      const r = await pairAndSave({ credentials: deps.credentials, fetch: deps.fetch }, prev, {
+        url: need(flags, "url"),
+        code: str(flags, "code"),
+        name: str(flags, "name") ?? hostname(),
+        vault: need(flags, "vault"),
+        backup: need(flags, "backup"),
+        external: str(flags, "external") ?? null,
+        allowUnencrypted: flags["allow-unencrypted"] === true,
+        version: deps.version,
+      });
+      return { paired: true, deviceId: r.deviceId, vaultName: r.vaultName };
     }
     case "preview": {
       const cfg = await loadConfig();

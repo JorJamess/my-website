@@ -16,7 +16,7 @@ export const GET = api<Ctx>(async (_req, { params }) => {
   if (p.op === "edit_note" && pl?.path && typeof pl.new_content === "string") {
     const doc = await sharedDocByPath(pl.path);
     const cur = doc ? await readDocument(doc.id, { max_chars: 40_000 }) : null;
-    if (cur && !cur.truncated) diff = lineDiff(cur.chunks.map((c) => c.content).join("\n\n"), pl.new_content);
+    if (cur && !cur.truncated) diff = lineDiff(cur.chunks.map((c) => c.content).join(""), pl.new_content);
   }
   return NextResponse.json({ ...p, diff });
 });

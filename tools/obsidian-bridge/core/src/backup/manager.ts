@@ -2,7 +2,10 @@ import { access, constants, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { Logger } from "../logging.js";
 import { cycleKeys, dueLabels, modeFor, type Label } from "./schedule.js";
-import { createSnapshot, listSnapshots, pruneSnapshots, type SnapshotLabel, type SnapshotManifest } from "./store.js";
+
+/** while a destination is unavailable (an unplugged SSD) it is looked for at most this often */
+const UNAVAILABLE_RECHECK_MS = 5 * 60_000;
+import { createSnapshot, listSnapshots, listSnapshotSummaries, pruneSnapshots, type SnapshotLabel, type SnapshotManifest } from "./store.js";
 import type { VolumeProvider } from "./volumes.js";
 
 export type BackupSettings = { localPath: string | null; externalPath: string | null; externalVolumeUuid?: string | null; externalSubpath?: string | null; allowUnencrypted?: boolean };
@@ -33,6 +36,15 @@ export class BackupManager {
 
   private get now() {
     return this.o.now?.() ?? new Date();
+  }
+
+  /** destinations that have every scheduled cycle of the current period; while it holds, a check costs nothing */
+  private satisfied: { keys: string; dests: Set<string> } = { keys: "", dests: new Set() };
+  private unavailableUntil = 0;
+
+  private expectedDestinations() {
+    const s = this.o.settings;
+    return [...(s.localPath ? ["local"] : []), ...(s.externalPath || s.externalVolumeUuid ? ["external"] : [])];
   }
 
   /** Where each destination's snapshots live right now. The external drive is found by its volume id, not a fixed path. */
@@ -94,21 +106,44 @@ export class BackupManager {
 
   /** Back up whatever scheduled cycle is still missing in each destination. Returns null when nothing was due. */
   async runScheduled(): Promise<DestResult[] | null> {
-    const results: DestResult[] = [];
-    for (const d of await this.destinations()) {
-      const existing = d.dir ? await listSnapshots(d.dir) : [];
-      const due = dueLabels(this.now, existing);
-      if (!due.length) continue;
-      results.push(await this.one(d, due, modeFor(due, existing.length > 0)));
+    const now = this.now;
+    const keys = JSON.stringify(cycleKeys(now));
+    if (this.satisfied.keys !== keys) {
+      this.satisfied = { keys, dests: new Set() };
+      this.unavailableUntil = 0;
     }
+    const expected = this.expectedDestinations();
+    // the common case, every minute: everything for this period is already backed up (or a drive is known to be away)
+    if (expected.every((d) => this.satisfied.dests.has(d))) return null;
+    if (now.getTime() < this.unavailableUntil && expected.every((d) => this.satisfied.dests.has(d) || d === "external")) return null;
+    const results: DestResult[] = [];
+    let away = false;
+    for (const d of await this.destinations()) {
+      const existing = d.dir ? await listSnapshotSummaries(d.dir) : [];
+      const due = dueLabels(now, existing);
+      if (!d.dir) {
+        away = true;
+        if (due.length) results.push(await this.one(d, due, "full"));
+        continue;
+      }
+      if (!due.length) {
+        this.satisfied.dests.add(d.name);
+        continue;
+      }
+      const r = await this.one(d, due, modeFor(due, existing.length > 0));
+      if (r.status === "ok") this.satisfied.dests.add(d.name);
+      results.push(r);
+    }
+    this.unavailableUntil = away ? now.getTime() + UNAVAILABLE_RECHECK_MS : 0;
     return results.length ? results : null;
   }
 
   /** The owner asked: back up now, to every available destination. */
   async backupNow(opts: { full?: boolean } = {}): Promise<DestResult[]> {
     const results: DestResult[] = [];
+    this.satisfied = { keys: "", dests: new Set() }; // look again at everything after a manual backup
     for (const d of await this.destinations()) {
-      const existing = d.dir ? await listSnapshots(d.dir) : [];
+      const existing = d.dir ? await listSnapshotSummaries(d.dir) : [];
       const due = dueLabels(this.now, existing);
       const mode = opts.full ? "full" : modeFor(due, existing.length > 0);
       results.push(await this.one(d, ["manual", ...due], mode, "manual"));

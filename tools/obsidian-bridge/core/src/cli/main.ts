@@ -10,7 +10,7 @@ import { ConfigError, isVault, loadConfig, paths, saveConfig, type BridgeConfig 
 import { fileLogger } from "../logging.js";
 import { createPdfExtractor } from "../pdf/extract.js";
 import { MacKeychain } from "../security/keychain.js";
-import { BridgeService } from "../service/daemon.js";
+import { AlreadyRunningError, BridgeService, NotPairedError } from "../service/daemon.js";
 import { callService } from "../service/ipc.js";
 import { syncVault, SyncNotConfirmedError } from "../sync/engine.js";
 import { previewInitialSync, type InitialPreview } from "../sync/preview.js";
@@ -19,6 +19,7 @@ import { walkVault } from "../vault/fs-safe.js";
 import { backupCommand, restoreCommand } from "./backup-cmd.js";
 import { MacVolumes } from "../backup/volumes.js";
 import { runWizard, wizardError } from "./wizard.js";
+import { pairAndSave } from "./pairing.js";
 import { canReadWrite, fileVaultOn, fmtBytes, freeBytes, nodeOk, volumeEncrypted, type Check } from "./system.js";
 
 const VERSION = "0.1.0";
@@ -29,7 +30,7 @@ const HELP: Record<string, string> = {
   setup: "obsidian-bridge setup [--vault <dir>] [--backup <dir>] [--external <dir>] [--url <https://...>] [--code <pairing code>] [--name <device name>] [--yes]\n  Guided setup: choose your vault and backup folders, check disk encryption, pair this Mac with LifeOS and preview the first sync.\n  Nothing is uploaded until you confirm the preview.",
   status: "obsidian-bridge status [--json]\n  Shows whether the Bridge is running, the last sync, notes by state, pending commands and today's request count.",
   doctor: "obsidian-bridge doctor\n  Checks Node, the vault, permissions, FileVault, backup folders, the PDF reader, the pairing and the connection to LifeOS.",
-  sync: "obsidian-bridge sync [--confirm-initial]\n  Syncs now. The very first sync needs --confirm-initial after you reviewed the preview.",
+  sync: "obsidian-bridge sync [--confirm-initial] [--allow-removals]\n  Syncs now. The very first sync needs --confirm-initial after you reviewed the preview.\n  --allow-removals: remove the cloud copy of every note that is gone from the vault even if that is more than half of them (normally a safety brake stops that).",
   pause: "obsidian-bridge pause\n  Stops syncing and applying approved changes until you run resume. Revocations from LifeOS are still applied.",
   resume: "obsidian-bridge resume\n  Starts syncing again.",
   backup: "obsidian-bridge backup [list] [--full]\n  Backs up the whole vault now (notes, PDFs, images, templates, .obsidian settings, everything) to the local folder and the external SSD if connected. Each result is verified before it counts.\n  'backup list' shows every restore point. Scheduled backups run by themselves: daily 02:00 (keep 7), Sunday 02:00 (keep 4), the 1st 02:00 (keep 3).",
@@ -42,13 +43,15 @@ const HELP: Record<string, string> = {
   version: "obsidian-bridge version\n  Prints the version.",
 };
 
-function parseArgs(argv: string[]) {
+export function parseArgs(argv: string[]) {
   const words: string[] = [];
   const flags: Record<string, string | true> = {};
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a.startsWith("--")) {
-      const [k, v] = a.slice(2).split("=");
+      const eq = a.indexOf("=");
+      const k = eq < 0 ? a.slice(2) : a.slice(2, eq);
+      const v = eq < 0 ? undefined : a.slice(eq + 1); // the value may itself contain "="
       if (v !== undefined) flags[k] = v;
       else if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("-") && !["yes", "json", "help", "confirm-initial"].includes(k)) flags[k] = argv[++i];
       else flags[k] = true;
@@ -115,7 +118,6 @@ async function setup(flags: Record<string, string | true>) {
 
     const extRaw = typeof flags.external === "string" ? flags.external : rl ? (await rl.question("External SSD backup folder (Enter to skip, add later): ")).trim() : "";
     const externalPath = extRaw ? resolve(extRaw) : null;
-    const extInfo = externalPath ? await new MacVolumes().info(externalPath) : null;
     if (externalPath && !(await canReadWrite(externalPath))) out("  ! The external folder isn't available right now. It will be skipped until the drive is connected.");
 
     const fv = await fileVaultOn();
@@ -135,36 +137,15 @@ async function setup(flags: Record<string, string | true>) {
 
     const url = (await ask(rl, "LifeOS address (https://...)", flags.url, prev?.lifeosUrl)).replace(/\/+$/, "");
     const deviceName = await ask(rl, "Name for this Mac", flags.name, prev?.deviceName ?? hostname());
-    const cfg: BridgeConfig = {
-      version: 1,
-      lifeosUrl: url,
-      vaultPath,
-      vaultName: vaultPath.split("/").pop() ?? "Vault",
-      deviceName,
-      deviceId: prev?.deviceId,
-      backup: {
-        localPath: backupPath,
-        externalPath,
-        externalVolumeUuid: extInfo?.uuid ?? null,
-        externalSubpath: extInfo?.mountPoint && externalPath ? relative(extInfo.mountPoint, externalPath) : null,
-        allowUnencrypted: needAck,
-      },
-      trashFolder: prev?.trashFolder ?? ".trash",
-      pollSeconds: prev?.pollSeconds ?? 15,
-      pdfMaxBytes: prev?.pdfMaxBytes ?? 100 * 1024 * 1024,
-      initialSyncConfirmedAt: prev?.initialSyncConfirmedAt,
-    };
-
     const keychain = new MacKeychain();
-    if (!cfg.deviceId || !(await keychain.get(cfg.deviceId))) {
+    let code: string | undefined;
+    if (!prev?.deviceId || !(await keychain.get(prev.deviceId))) {
       out("\nIn LifeOS open Settings → Obsidian → Pair a Mac and copy the code.");
-      const code = await ask(rl, "Pairing code", flags.code);
-      const res = await BridgeClient.pair(url, { code, name: deviceName, vault_name: cfg.vaultName, version: VERSION });
-      await keychain.set(res.device_id, res.token);
-      cfg.deviceId = res.device_id;
-      out("  ✓ Paired. The device token is stored in the macOS Keychain.");
-    } else out("  ✓ Already paired");
-    await saveConfig(cfg);
+      code = await ask(rl, "Pairing code", flags.code);
+    }
+    const res = await pairAndSave({ credentials: keychain }, prev, { url, code, name: deviceName, vault: vaultPath, backup: backupPath, external: externalPath, allowUnencrypted: needAck, version: VERSION });
+    out(res.repaired ? "  ✓ Paired. The device token is stored in the macOS Keychain." : "  ✓ Already paired");
+    const cfg = await loadConfig();
 
     const preview = await previewInitialSync(vaultPath, { pdfMaxBytes: cfg.pdfMaxBytes });
     printPreview(preview);
@@ -263,7 +244,7 @@ async function status(flags: Record<string, string | true>) {
   return 0;
 }
 
-async function oneShotSync(confirmInitial: boolean) {
+async function oneShotSync(confirmInitial: boolean, allowAllRemovals = false) {
   const { cfg, p, state } = await loadAll();
   if (confirmInitial && !cfg.initialSyncConfirmedAt) {
     printPreview(await previewInitialSync(cfg.vaultPath, { pdfMaxBytes: cfg.pdfMaxBytes }));
@@ -274,7 +255,7 @@ async function oneShotSync(confirmInitial: boolean) {
   const token = cfg.deviceId ? await new MacKeychain().get(cfg.deviceId) : null;
   if (!token) throw new Error("This Mac is not paired. Run: obsidian-bridge pair");
   const client = new BridgeClient(cfg.lifeosUrl, token);
-  const report = await syncVault({ cfg, state, api: client, extractPdf: createPdfExtractor(helperPath(), { maxBytes: cfg.pdfMaxBytes }), log: fileLogger(p.log), persist: () => saveState(p.state, state) });
+  const report = await syncVault({ cfg, state, api: client, extractPdf: createPdfExtractor(helperPath(), { maxBytes: cfg.pdfMaxBytes }), log: fileLogger(p.log), persist: () => saveState(p.state, state), allowAllRemovals });
   await saveState(p.state, state);
   out(`Synced: ${report.uploaded} uploaded, ${report.pathUpdates} moved, ${report.removed} removed, ${report.unchanged} unchanged.`);
   const b = report.blocked;
@@ -287,7 +268,7 @@ async function run() {
   const { cfg, p, state } = await loadAll();
   const log = fileLogger(p.log, (l) => process.stdout.write(l + "\n"));
   const backups = cfg.backup.localPath ? new (await import("../backup/manager.js")).BackupManager({ vaultPath: cfg.vaultPath, vaultName: cfg.vaultName, settings: cfg.backup, volumes: new MacVolumes(), log }) : undefined;
-  const svc = new BridgeService({ cfg, configFile: p.config, stateFile: p.state, socketPath: p.socket, state, credentials: new MacKeychain(), extractPdf: createPdfExtractor(helperPath(), { maxBytes: cfg.pdfMaxBytes }), log, backups });
+  const svc = new BridgeService({ cfg, configFile: p.config, stateFile: p.state, socketPath: p.socket, pidFile: join(p.home, "bridge.pid"), state, credentials: new MacKeychain(), extractPdf: createPdfExtractor(helperPath(), { maxBytes: cfg.pdfMaxBytes }), log, backups });
   await svc.start();
   const quit = () => void svc.stop().then(() => process.exit(0));
   process.on("SIGTERM", quit);
@@ -297,11 +278,16 @@ async function run() {
 async function pair(flags: Record<string, string | true>, rl: ReturnType<typeof createInterface> | null) {
   const cfg = await loadConfig();
   const code = await ask(rl, "Pairing code from LifeOS (Settings → Obsidian)", flags.code);
-  const res = await BridgeClient.pair(cfg.lifeosUrl, { code, name: cfg.deviceName, vault_name: cfg.vaultName, version: VERSION });
-  const kc = new MacKeychain();
-  if (cfg.deviceId) await kc.delete(cfg.deviceId);
-  await kc.set(res.device_id, res.token);
-  await saveConfig({ ...cfg, deviceId: res.device_id });
+  await pairAndSave({ credentials: new MacKeychain() }, cfg, {
+    url: cfg.lifeosUrl,
+    code,
+    name: cfg.deviceName,
+    vault: cfg.vaultPath,
+    backup: cfg.backup.localPath,
+    external: cfg.backup.externalPath,
+    allowUnencrypted: cfg.backup.allowUnencrypted === true,
+    version: VERSION,
+  });
   out("Paired. Restart the service if it is running (obsidian-bridge run).");
 }
 
@@ -348,12 +334,12 @@ export async function main(argv: string[]): Promise<number> {
       case "doctor":
         return await doctor();
       case "sync": {
-        const live = await callService(paths().socket, flags["confirm-initial"] ? "confirm-initial-sync" : "sync", {});
+        const live = await callService(paths().socket, flags["confirm-initial"] ? "confirm-initial-sync" : "sync", { allowRemovals: flags["allow-removals"] === true });
         if (live) {
           out(live.ok ? JSON.stringify(live.data, null, 2) : `Error: ${live.error}`);
           return live.ok ? 0 : 1;
         }
-        return await oneShotSync(flags["confirm-initial"] === true);
+        return await oneShotSync(flags["confirm-initial"] === true, flags["allow-removals"] === true);
       }
       case "pause":
       case "resume": {
@@ -407,7 +393,13 @@ export async function main(argv: string[]): Promise<number> {
       }
       case "run":
         rl?.close();
-        await run();
+        try {
+          await run();
+        } catch (e) {
+          // "nothing to do" is not a crash: exit cleanly so the login item does not restart it every 15 seconds
+          if (e instanceof AlreadyRunningError || e instanceof NotPairedError || e instanceof ConfigError) return (err(e.message), 0);
+          throw e;
+        }
         return await new Promise<number>(() => {}); // keeps running until a signal
       default:
         err(`Unknown command: ${cmd}. Run: obsidian-bridge help`);

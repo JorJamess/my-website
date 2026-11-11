@@ -2,8 +2,8 @@ import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 export type DocStatus = "synced" | "blocked_secret" | "blocked_revoked" | "failed" | "no_text" | "pending";
-export type DocState = { path: string; hash: string; syncVersion: number; status: DocStatus; refsKey: string; message?: string };
-export type PdfState = { id: string; size: number; mtimeMs: number; hash: string; syncVersion: number; status: DocStatus; pages?: number; message?: string };
+export type DocState = { path: string; hash: string; syncVersion: number; status: DocStatus; refsKey: string; message?: string; /** how many owner-approved findings existed when it was last scanned */ exceptionCount?: number; failedAt?: string };
+export type PdfState = { id: string; size: number; mtimeMs: number; hash: string; syncVersion: number; status: DocStatus; pages?: number; message?: string; exceptionCount?: number; failedAt?: string };
 export type ExceptionState = { docId: string; fingerprint: string; contentHash: string };
 
 export type BridgeState = {
@@ -16,6 +16,8 @@ export type BridgeState = {
   /** grant version to upload with, after the owner re-enabled a note */
   grants: Record<string, number>;
   exceptions: ExceptionState[];
+  /** notes the owner approved deleting (via LifeOS): their cloud copies are removed even when the safety brake would stop a mass removal */
+  removalApproved: string[];
   cursors: { rev: string; exc: string };
   /** results of applied commands not yet confirmed by LifeOS; resent instead of running the command again */
   results: Record<string, { status: "applied" | "conflict" | "failed"; message?: string; conflict?: Record<string, unknown> }>;
@@ -34,7 +36,7 @@ export type BackupStatus = { status: "ok" | "unavailable" | "failed"; at: string
 
 export const EPOCH = "1970-01-01T00:00:00.000Z";
 
-export const emptyState = (): BridgeState => ({ version: 1, docs: {}, pdfs: {}, revoked: {}, grants: {}, exceptions: [], results: {}, backup: {}, cursors: { rev: EPOCH, exc: EPOCH }, usage: {} });
+export const emptyState = (): BridgeState => ({ version: 1, docs: {}, pdfs: {}, revoked: {}, grants: {}, exceptions: [], removalApproved: [], results: {}, backup: {}, cursors: { rev: EPOCH, exc: EPOCH }, usage: {} });
 
 export async function loadState(file: string): Promise<BridgeState> {
   try {

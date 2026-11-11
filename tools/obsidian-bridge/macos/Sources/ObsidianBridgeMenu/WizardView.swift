@@ -228,7 +228,7 @@ struct WizardView: View {
             case .preview:
                 _ = try await CoreRunner.wizard("confirm")
             case .finish:
-                if installLogin { try LaunchAgent.install() } else { try LaunchAgent.launchDetached() }
+                if installLogin { try LaunchAgent.install() } else { try LaunchAgent.restart() }
                 model.refresh()
                 NSApp.keyWindow?.close()
                 return

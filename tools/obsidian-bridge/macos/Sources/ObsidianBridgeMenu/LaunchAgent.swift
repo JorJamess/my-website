@@ -4,6 +4,28 @@ import Foundation
 enum LaunchAgent {
     static var uid: String { String(getuid()) }
 
+    /// Is a Bridge service answering on its socket right now? (Never start a second one.)
+    static func isRunning() -> Bool { (try? BridgeSocket.call("status", timeout: 2)) != nil }
+
+    /// Ask a running service to stop cleanly and wait for it to go away.
+    static func stopAndWait() {
+        guard isRunning() else { return }
+        _ = try? BridgeSocket.call("shutdown", timeout: 2)
+        for _ in 0..<25 {
+            Thread.sleep(forTimeInterval: 0.2)
+            if !isRunning() { break }
+        }
+    }
+
+    /// Run the service with its current settings: stop the old one (if any), then start it the way this Mac is set up.
+    static func restart() throws {
+        stopAndWait()
+        if isInstalled {
+            if isLoaded() { try shell("/bin/launchctl", ["kickstart", "-k", "gui/\(uid)/\(BridgePaths.label)"]) }
+            else { try shell("/bin/launchctl", ["bootstrap", "gui/\(uid)", BridgePaths.plist]) }
+        } else { try launchDetached() }
+    }
+
     static var isInstalled: Bool { FileManager.default.fileExists(atPath: BridgePaths.plist) }
 
     static func isLoaded() -> Bool {
@@ -33,6 +55,7 @@ enum LaunchAgent {
 
     static func install() throws {
         guard let core = BridgePaths.core() else { throw CoreError.notInstalled }
+        stopAndWait() // a service started without the login item must not keep running next to the new one
         try FileManager.default.createDirectory(atPath: BridgePaths.home + "/logs", withIntermediateDirectories: true)
         try FileManager.default.createDirectory(atPath: (BridgePaths.plist as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
         try plistText(node: core.node, cli: core.cli).write(toFile: BridgePaths.plist, atomically: true, encoding: .utf8)
@@ -47,6 +70,7 @@ enum LaunchAgent {
 
     /// Starts the service for this session only (no login item). It keeps running after the app quits.
     static func launchDetached() throws {
+        if isRunning() { return }
         guard let core = BridgePaths.core() else { throw CoreError.notInstalled }
         try FileManager.default.createDirectory(atPath: BridgePaths.home + "/logs", withIntermediateDirectories: true)
         let logPath = BridgePaths.home + "/logs/launchd.out.log"
@@ -60,6 +84,7 @@ enum LaunchAgent {
     }
 
     static func start() throws {
+        if isRunning() { return }
         // without a login item, just run it now; installing one is a separate, explicit choice
         if !isInstalled { try launchDetached(); return }
         if isLoaded() { try shell("/bin/launchctl", ["kickstart", "gui/\(uid)/\(BridgePaths.label)"]) }

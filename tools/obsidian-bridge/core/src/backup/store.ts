@@ -27,6 +27,9 @@ export type SnapshotManifest = {
   excluded: string;
 };
 
+/** Everything about a snapshot except its file list: cheap to read, so schedule checks never parse the big manifest. */
+export type SnapshotSummary = Omit<SnapshotManifest, "files" | "dirs">;
+
 export const EXCLUDE_NOTE = "Only temporary files written by the Bridge itself (*.bridge-tmp) and macOS .DS_Store files. Everything else is included, including .obsidian, .trash and hidden files.";
 const excluded = (name: string) => name.endsWith(".bridge-tmp") || name === ".DS_Store";
 
@@ -75,6 +78,43 @@ export async function listSnapshots(destDir: string): Promise<SnapshotManifest[]
   return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
+const ID_OK = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+/** Newest first, from the small summary file next to each manifest (older snapshots without one fall back to the manifest). */
+export async function listSnapshotSummaries(destDir: string): Promise<SnapshotSummary[]> {
+  const dir = join(destDir, "snapshots");
+  const out: SnapshotSummary[] = [];
+  for (const name of await readdir(dir).catch(() => [] as string[])) {
+    if (name.startsWith(".") || !ID_OK.test(name)) continue;
+    try {
+      let m: SnapshotSummary;
+      // a snapshot counts as complete only when its manifest is there (the summary alone is not enough)
+      if (!(await stat(join(dir, name, "manifest.json")).catch(() => null))?.isFile()) continue;
+      try {
+        m = JSON.parse(await readFile(join(dir, name, "summary.json"), "utf8")) as SnapshotSummary;
+      } catch {
+        const { files: _f, dirs: _d, ...rest } = JSON.parse(await readFile(join(dir, name, "manifest.json"), "utf8")) as SnapshotManifest;
+        m = rest;
+      }
+      if (m.version === 1 && m.id === name) out.push(m);
+    } catch {
+      /* not a complete snapshot: never offered */
+    }
+  }
+  return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/** One snapshot's full manifest (with its file list), or null. */
+export async function readManifest(destDir: string, id: string): Promise<SnapshotManifest | null> {
+  if (!ID_OK.test(id)) return null;
+  try {
+    const m = JSON.parse(await readFile(join(destDir, "snapshots", id, "manifest.json"), "utf8")) as SnapshotManifest;
+    return m.version === 1 && m.id === id ? m : null;
+  } catch {
+    return null;
+  }
+}
+
 export const snapshotFilesDir = (destDir: string, id: string) => join(destDir, "snapshots", id, "files");
 
 async function sameFile(prevRoot: string, prev: ManifestEntry | undefined, cur: ManifestEntry) {
@@ -112,7 +152,8 @@ export async function createSnapshot(destDir: string, o: CreateOptions): Promise
   await mkdir(filesRoot);
 
   const source = await scanSource(o.vaultPath);
-  const previous = o.mode === "incremental" ? (await listSnapshots(destDir))[0] : undefined;
+  const newest = o.mode === "incremental" ? (await listSnapshotSummaries(destDir))[0] : undefined;
+  const previous = newest ? ((await readManifest(destDir, newest.id)) ?? undefined) : undefined;
   const prevMap = new Map(previous?.files.map((f) => [f.path, f]));
   const prevRoot = previous ? snapshotFilesDir(destDir, previous.id) : "";
   let linkOk = !!previous;
@@ -180,6 +221,8 @@ export async function createSnapshot(destDir: string, o: CreateOptions): Promise
       excluded: EXCLUDE_NOTE,
     };
     await writeFile(join(work, "manifest.json"), JSON.stringify(manifest));
+    const { files: _files, dirs: _dirs, ...summary } = manifest;
+    await writeFile(join(work, "summary.json"), JSON.stringify(summary));
     // verify the work folder as if it were the finished snapshot, before it becomes visible
     const verify = await verifyDir(work, manifest, entries.length);
     if (!verify.ok) throw new BackupError(`Verification failed: ${verify.problems.slice(0, 3).join("; ")}`);
@@ -207,11 +250,18 @@ async function readable(p: string) {
 }
 
 /** Basic verification: manifest present, file count matches, every path present with the recorded size, every file readable. */
-async function verifyDir(snapDir: string, manifest: SnapshotManifest, expectedCount?: number): Promise<VerifyResult> {
+type Depth = "full" | "stat" | "light";
+
+async function verifyDir(snapDir: string, manifest: SnapshotManifest, expectedCount?: number, depth: Depth = "full"): Promise<VerifyResult> {
   const problems: string[] = [];
   if (expectedCount !== undefined && manifest.fileCount !== expectedCount) problems.push(`manifest lists ${manifest.fileCount} files but ${expectedCount} were in the vault`);
   if (manifest.files.length !== manifest.fileCount) problems.push("manifest file count does not match its list");
   const root = join(snapDir, "files");
+  if (depth === "light") {
+    // cheap check used for backups that are only being kept: the manifest parsed and the files folder is there
+    if (!(await stat(root).catch(() => null))?.isDirectory()) problems.push("snapshot files folder is missing");
+    return { ok: problems.length === 0, files: manifest.fileCount, bytes: manifest.totalBytes, problems };
+  }
   // what is actually on disk
   const onDisk = new Set<string>();
   async function walk(abs: string, rel: string) {
@@ -233,7 +283,7 @@ async function verifyDir(snapDir: string, manifest: SnapshotManifest, expectedCo
       }
       const s = await stat(p);
       if (s.size !== f.size) problems.push(`size differs: ${f.path}`);
-      await readable(p);
+      if (depth === "full") await readable(p);
       bytes += s.size;
     } catch {
       problems.push(`missing or unreadable: ${f.path}`);
@@ -243,10 +293,11 @@ async function verifyDir(snapDir: string, manifest: SnapshotManifest, expectedCo
   return { ok: problems.length === 0, files: manifest.fileCount, bytes, problems };
 }
 
-export async function verifySnapshot(destDir: string, id: string): Promise<VerifyResult> {
+export async function verifySnapshot(destDir: string, id: string, depth: Depth = "full"): Promise<VerifyResult> {
   try {
+    if (!ID_OK.test(id)) throw new Error("bad id");
     const manifest = JSON.parse(await readFile(join(destDir, "snapshots", id, "manifest.json"), "utf8")) as SnapshotManifest;
-    return await verifyDir(join(destDir, "snapshots", id), manifest);
+    return await verifyDir(join(destDir, "snapshots", id), manifest, undefined, depth);
   } catch {
     return { ok: false, files: 0, bytes: 0, problems: ["manifest missing or unreadable"] };
   }
@@ -258,7 +309,7 @@ export async function verifySnapshot(destDir: string, id: string): Promise<Verif
  * keep is still complete: if one is damaged nothing is deleted at all.
  */
 export async function pruneSnapshots(destDir: string, policy: Record<string, number> = RETENTION) {
-  const all = await listSnapshots(destDir);
+  const all = await listSnapshotSummaries(destDir);
   const keep = new Set<string>();
   for (const [label, n] of Object.entries(policy)) {
     for (const s of all.filter((x) => (x.labels as string[]).includes(label)).slice(0, n)) keep.add(s.id);
@@ -267,8 +318,12 @@ export async function pruneSnapshots(destDir: string, policy: Record<string, num
   for (const s of all) if (!s.labels.some((l) => l in policy)) keep.add(s.id);
   const remove = all.filter((s) => !keep.has(s.id));
   if (!remove.length) return { kept: [...keep], deleted: [] as string[], skipped: null as string | null };
+  // Looking at every file of every kept backup is slow, so it is only done when a scheduled backup is being deleted.
+  // When only safety or manual backups go, a light check (manifest and files folder present) is enough.
+  const deep = remove.some((s) => s.labels.some((l) => l === "daily" || l === "weekly" || l === "monthly"));
   for (const id of keep) {
-    const v = await verifySnapshot(destDir, id);
+    const keptIsScheduled = all.find((s) => s.id === id)!.labels.some((l) => l === "daily" || l === "weekly" || l === "monthly");
+    const v = await verifySnapshot(destDir, id, deep && keptIsScheduled ? "stat" : "light");
     if (!v.ok) return { kept: [...keep], deleted: [], skipped: `Not deleting old backups: ${id} is not complete (${v.problems[0]})` };
   }
   for (const s of remove) await rm(join(destDir, "snapshots", s.id), { recursive: true, force: true });

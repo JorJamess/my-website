@@ -1,15 +1,15 @@
-import { mkdtemp, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { BridgeService } from "../src/service/daemon.js";
+import { AlreadyRunningError, BridgeService, NotPairedError } from "../src/service/daemon.js";
 import { callService } from "../src/service/ipc.js";
 import { MemoryCredentialStore } from "../src/security/keychain.js";
 import { emptyState } from "../src/sync/state.js";
 import { silentLogger } from "../src/logging.js";
 import { loadConfig, saveConfig, validateConfig, ConfigError, type BridgeConfig } from "../src/config/config.js";
 import { redact } from "../src/logging.js";
-import { main } from "../src/cli/main.js";
+import { main, parseArgs } from "../src/cli/main.js";
 import { createPdfExtractor } from "../src/pdf/extract.js";
 import { ID, makeVault, NOTE, NATIVE } from "./helpers/vault.js";
 import { BackupManager } from "../src/backup/manager.js";
@@ -247,5 +247,83 @@ describe("backups inside the service", () => {
     const { svc } = await service();
     expect(svc.status().backup.configured).toBe(false);
     await expect(svc.backupNow()).rejects.toThrow(/not set up/);
+  });
+});
+
+describe("one Bridge at a time, and no restart loop", () => {
+  const baseOpts = async () => {
+    const v = await makeVault();
+    const home = await realpath(await mkdtemp(join(tmpdir(), "one-")));
+    cleanups.push(v.cleanup, () => rm(home, { recursive: true, force: true }));
+    const creds = new MemoryCredentialStore();
+    await creds.set("dev1", "token-token-token-token-1");
+    return { v, home, creds };
+  };
+  const make = (b: Awaited<ReturnType<typeof baseOpts>>, over: { deviceId?: string; creds?: MemoryCredentialStore } = {}) =>
+    new BridgeService({
+      cfg: { version: 1, lifeosUrl: "https://x.test", vaultPath: b.v.dir, vaultName: "T", deviceName: "M", deviceId: over.deviceId ?? "dev1", backup: { localPath: null, externalPath: null }, trashFolder: ".trash", pollSeconds: 15, pdfMaxBytes: 1e8 },
+      configFile: join(b.home, "config.json"), stateFile: join(b.home, "state.json"), socketPath: join(b.home, "b.sock"), pidFile: join(b.home, "bridge.pid"), state: emptyState(), credentials: over.creds ?? b.creds,
+      extractPdf: createPdfExtractor(join(NATIVE, "pdf-text")), log: silentLogger, fetch: async (url) => Response.json(String(url).includes("/poll") ? POLL : { ok: true }),
+      debounceMs: 20, reconcileEveryMs: 3_600_000, wakeCheckMs: 3_600_000,
+    });
+
+  it("a second service refuses to start while the first is alive, and does not disturb its socket", async () => {
+    const b = await baseOpts();
+    const first = make(b);
+    await first.start();
+    cleanups.push(() => first.stop());
+    await expect(make(b).start()).rejects.toThrow(AlreadyRunningError);
+    expect((await callService(join(b.home, "b.sock"), "status"))!.ok).toBe(true); // the first one still answers
+  });
+  it("a leftover process id file from a dead process does not block a start, and stopping cleans it up", async () => {
+    const b = await baseOpts();
+    await writeFile(join(b.home, "bridge.pid"), "999999");
+    const svc = make(b);
+    await svc.start();
+    expect(Number(await readFile(join(b.home, "bridge.pid"), "utf8"))).toBe(process.pid);
+    await svc.stop();
+    await expect(readFile(join(b.home, "bridge.pid"), "utf8")).rejects.toThrow();
+    // and a live process id (this one) written by someone else blocks
+    await writeFile(join(b.home, "bridge.pid"), String(process.ppid));
+    await expect(make(b).start()).rejects.toThrow(AlreadyRunningError);
+  });
+  it("an unpaired Mac is reported as such, and leaves nothing behind", async () => {
+    const b = await baseOpts();
+    await expect(make(b, { deviceId: "nobody" }).start()).rejects.toThrow(NotPairedError);
+    await expect(readFile(join(b.home, "bridge.pid"), "utf8")).rejects.toThrow();
+  });
+  it("`run` with nothing set up or nobody paired exits cleanly (so launchd does not restart it in a loop)", async () => {
+    const home = await realpath(await mkdtemp(join(tmpdir(), "runhome-")));
+    cleanups.push(() => rm(home, { recursive: true, force: true }));
+    const prev = process.env.OBSIDIAN_BRIDGE_HOME;
+    process.env.OBSIDIAN_BRIDGE_HOME = home;
+    try {
+      const lines: string[] = [];
+      const e = process.stderr.write.bind(process.stderr);
+      process.stderr.write = ((s: string) => (lines.push(String(s)), true)) as typeof process.stderr.write;
+      try {
+        expect(await main(["run"])).toBe(0);
+        const v = await makeVault();
+        cleanups.push(v.cleanup);
+        await saveConfig(validateConfig({ version: 1, lifeosUrl: "https://x.test", vaultPath: v.dir, vaultName: "V", deviceName: "M", backup: { localPath: null, externalPath: null } }));
+        expect(await main(["run"])).toBe(0);
+      } finally {
+        process.stderr.write = e;
+      }
+      expect(lines.join("")).toMatch(/Not set up yet/);
+      expect(lines.join("")).toMatch(/not paired/);
+    } finally {
+      if (prev === undefined) delete process.env.OBSIDIAN_BRIDGE_HOME;
+      else process.env.OBSIDIAN_BRIDGE_HOME = prev;
+    }
+  });
+});
+
+describe("command line arguments", () => {
+  it("keeps values that contain =", () => {
+    const { words, flags } = parseArgs(["setup", "--url=https://host.example/?tenant=a&x=1", "--vault=/Users/me/Notes=old", "--yes", "--name", "My Mac", "--code=AB=CD"]);
+    expect(words).toEqual(["setup"]);
+    expect(flags).toEqual({ url: "https://host.example/?tenant=a&x=1", vault: "/Users/me/Notes=old", yes: true, name: "My Mac", code: "AB=CD" });
+    expect(parseArgs(["sync", "--allow-removals"]).flags["allow-removals"]).toBe(true);
   });
 });

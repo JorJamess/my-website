@@ -1,6 +1,7 @@
 import { watch, type FSWatcher } from "node:fs";
-import { chmod, mkdir, rm } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:net";
+import { callService } from "./ipc.js";
 import { dirname } from "node:path";
 import { ApiError, BridgeClient, DeviceRevokedError, type FetchLike, type PollResult } from "../cloudflare/client.js";
 import { executeCommand, noBackupConfigured, type SafetyBackup } from "../approvals/executor.js";
@@ -13,7 +14,31 @@ import { findNoteById, setSyncFlag, syncVault, SyncNotConfirmedError, type SyncR
 import { previewInitialSync } from "../sync/preview.js";
 import { countUsage, saveState, type BackupStatus, type BridgeState } from "../sync/state.js";
 
+/** another Bridge is already running for this user: starting a second one would make them overwrite each other */
+export class AlreadyRunningError extends Error {
+  constructor() {
+    super("The Bridge is already running.");
+  }
+}
+/** nothing to run yet: this Mac has no device token */
+export class NotPairedError extends Error {
+  constructor() {
+    super("This Mac is not paired. Run: obsidian-bridge pair");
+  }
+}
+
+const alive = (pid: number) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "EPERM";
+  }
+};
+
 export type ServiceOptions = {
+  /** a file holding this service's process id, so a second instance can tell it is not alone */
+  pidFile?: string;
   cfg: BridgeConfig;
   configFile: string;
   stateFile: string;
@@ -107,9 +132,13 @@ export class BridgeService {
 
   async start() {
     if (!this.stopped) return;
+    await this.claimInstance();
     this.stopped = false;
     const token = this.cfg.deviceId ? await this.o.credentials.get(this.cfg.deviceId) : null;
-    if (!token) throw new Error("This Mac is not paired. Run: obsidian-bridge pair");
+    if (!token) {
+      await this.releaseInstance();
+      throw new NotPairedError();
+    }
     this.client = new BridgeClient(this.cfg.lifeosUrl, token, this.o.fetch, () => countUsage(this.state, "request"));
     await this.listen();
     this.startWatcher();
@@ -149,7 +178,34 @@ export class BridgeService {
     await this.queue.catch(() => {});
     await this.save();
     await rm(this.o.socketPath, { force: true });
+    await this.releaseInstance();
     this.log.info("bridge stopped");
+  }
+
+  /** Refuse to start if another Bridge is alive (it answers on the socket, or its process id file points at a live process). */
+  private async claimInstance() {
+    const live = await callService(this.o.socketPath, "status", {}, 1500);
+    if (live) throw new AlreadyRunningError();
+    const f = this.o.pidFile;
+    if (!f) return;
+    await mkdir(dirname(f), { recursive: true, mode: 0o700 });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await writeFile(f, String(process.pid), { flag: "wx", mode: 0o600 });
+        return;
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+        const other = Number(await readFile(f, "utf8").catch(() => ""));
+        if (other && other !== process.pid && alive(other)) throw new AlreadyRunningError();
+        await rm(f, { force: true }); // left behind by a process that is gone
+      }
+    }
+    throw new AlreadyRunningError();
+  }
+
+  private async releaseInstance() {
+    const f = this.o.pidFile;
+    if (f && Number(await readFile(f, "utf8").catch(() => "")) === process.pid) await rm(f, { force: true });
   }
 
   /* ------------------------------- polling ------------------------------- */
@@ -219,6 +275,7 @@ export class BridgeService {
         this.state.revoked[r.document_id] = r.grant_version;
         const d = this.state.docs[r.document_id];
         if (d) d.status = "blocked_revoked";
+        this.resetPdfState(r.document_id, true);
         const file = await findNoteById(this.cfg.vaultPath, r.document_id);
         if (file) await setSyncFlag(file, false);
         this.log.info("applied revoke from LifeOS", { document: r.document_id });
@@ -226,6 +283,7 @@ export class BridgeService {
         if (this.state.grants[r.document_id] === r.grant_version && this.state.revoked[r.document_id] === undefined) continue;
         delete this.state.revoked[r.document_id];
         this.state.grants[r.document_id] = r.grant_version;
+        this.resetPdfState(r.document_id, false);
         const file = await findNoteById(this.cfg.vaultPath, r.document_id);
         // the owner re-enabled it in LifeOS: switch the flag back on; the next sync scans it fresh before anything is uploaded
         if (file) await setSyncFlag(file, true);
@@ -278,7 +336,29 @@ export class BridgeService {
         else this.log.warn("could not deliver result yet", { command: c.id });
       }
       this.log.info("command finished", { op: claimed.op, status: result.status });
-      if (result.status === "applied") this.requestSync("command");
+      if (result.status === "applied") {
+        this.approveRemovals(claimed.op, claimed.payload);
+        this.requestSync("command");
+      }
+    }
+  }
+
+  /** The owner approved deleting a note or folder: its cloud copies are removed even if the mass-removal brake would stop it. */
+  private approveRemovals(op: string, payload: Record<string, unknown>) {
+    const p = typeof payload.path === "string" ? payload.path.toLowerCase() : "";
+    if (!p || (op !== "delete_note" && op !== "delete_folder")) return;
+    for (const [id, d] of Object.entries(this.state.docs)) {
+      const path = d.path.toLowerCase();
+      if ((op === "delete_note" ? path === p : path.startsWith(`${p}/`)) && !this.state.removalApproved.includes(id)) this.state.removalApproved.push(id);
+    }
+  }
+
+  /** A PDF's local state is dropped when LifeOS re-enables it, so it is read and uploaded again; revoked ones are marked. */
+  private resetPdfState(id: string, revoked: boolean) {
+    for (const [rel, p] of Object.entries(this.state.pdfs)) {
+      if (p.id !== id) continue;
+      if (revoked) p.status = "blocked_revoked";
+      else delete this.state.pdfs[rel];
     }
   }
 
@@ -360,7 +440,7 @@ export class BridgeService {
     this.debounce = setTimeout(() => void this.syncNow(reason), this.o.debounceMs ?? 2000);
   }
 
-  async syncNow(reason = "manual"): Promise<SyncReport | null> {
+  async syncNow(reason = "manual", opts: { allowAllRemovals?: boolean } = {}): Promise<SyncReport | null> {
     if (this.deviceRevoked || this.isPaused() || !this.cfg.initialSyncConfirmedAt) return null;
     if (this.syncing) {
       this.syncWanted = true;
@@ -378,6 +458,7 @@ export class BridgeService {
           extractPdf: this.o.extractPdf,
           log: this.log,
           persist: () => this.save(),
+          allowAllRemovals: opts.allowAllRemovals,
         });
         this.log.info("sync finished", { reason, uploaded: report.uploaded, removed: report.removed, pathUpdates: report.pathUpdates, blocked: report.blocked });
         this.online = true;
@@ -506,7 +587,7 @@ export class BridgeService {
         case "status":
           return { ok: true, data: this.status() };
         case "sync":
-          return { ok: true, data: (await this.syncNow("manual")) ?? { skipped: this.isPaused() ? "paused" : this.syncing ? "already running" : "not ready" } };
+          return { ok: true, data: (await this.syncNow("manual", { allowAllRemovals: args?.allowRemovals === true })) ?? { skipped: this.isPaused() ? "paused" : this.syncing ? "already running" : "not ready" } };
         case "pause":
           await this.setPaused(true);
           return { ok: true, data: this.status() };
@@ -528,6 +609,7 @@ export class BridgeService {
           const res = await this.client.reenable(id);
           delete this.state.revoked[id];
           this.state.grants[id] = res.grant_version;
+          this.resetPdfState(id, false);
           const file = await findNoteById(this.cfg.vaultPath, id);
           if (file) await setSyncFlag(file, true);
           delete this.state.docs[id];

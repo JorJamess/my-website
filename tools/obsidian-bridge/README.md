@@ -21,7 +21,7 @@ Setup asks for your vault, a backup folder, checks FileVault, pairs with a one-t
 To start at login: `tools/obsidian-bridge/scripts/install.sh` (asks first, no root). Remove with `uninstall.sh`.
 
 ## Commands
-`setup`, `status`, `doctor`, `sync`, `pause`, `resume`, `backup [list]`, `restore preview|--new-vault|--merge`, `logs`, `pair`, `unpair`, `reenable <note id>`, `run`, `version`. Use `obsidian-bridge help <command>`.
+`setup`, `status`, `doctor`, `sync [--allow-removals]`, `pause`, `resume`, `backup [list]`, `restore preview|--new-vault|--merge`, `logs`, `pair`, `unpair`, `reenable <note id>`, `run`, `version`. Use `obsidian-bridge help <command>`.
 
 ## Security
 - The device token is in the macOS Keychain, never in a file, the vault or Git. Config and state files are private to your user (0600).

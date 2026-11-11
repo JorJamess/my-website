@@ -48,62 +48,95 @@ export function findPdfRefs(markdown: string): PdfRef[] {
   return out;
 }
 
+/** Split into code (fenced or inline) and everything else; only the latter is ever rewritten. */
+const CODE = /```[\s\S]*?```|`[^`\n]*`/g;
+function mapOutsideCode(text: string, fn: (s: string) => string) {
+  let out = "";
+  let last = 0;
+  for (const m of text.matchAll(CODE)) {
+    out += fn(text.slice(last, m.index)) + m[0];
+    last = (m.index ?? 0) + m[0].length;
+  }
+  return out + fn(text.slice(last));
+}
+
 /**
  * The text that is sent to the cloud: images and other attachments become placeholders (the files themselves never
- * leave the Mac). Links to other notes are left as written; the target's content is never included.
+ * leave the Mac). Links to other notes are left as written; the target's content is never included. Code is left alone.
+ * A placeholder never contains a line break, so the result has exactly the same number of lines as the note.
+ * `collect` receives every (placeholder, original) pair so an edit can put the originals back.
  */
-export function renderForUpload(markdown: string): string {
+export function renderForUpload(markdown: string, collect?: (placeholder: string, original: string) => void): string {
   const placeholder = (name: string, image: boolean) => `[${image ? "Image" : "Attachment"} attachment: ${name} — not synchronized]`;
-  let out = markdown.replace(/(!)\[\[([^\]|#\n]+?)(?:#[^\]|\n]*)?(?:\|[^\]\n]*)?\]\]/g, (full, _bang: string, target: string) => {
-    const ext = extOf(target);
-    if (IMAGE_EXT.has(ext)) return placeholder(basename(target.trim()), true);
-    if (ATTACHMENT_EXT.has(ext)) return placeholder(basename(target.trim()), false);
-    return full;
+  const note = (ph: string, original: string) => {
+    collect?.(ph, original);
+    return ph;
+  };
+  return mapOutsideCode(markdown, (seg) => {
+    let out = seg.replace(/(!)\[\[([^\]|#\n]+?)(?:#[^\]|\n]*)?(?:\|[^\]\n]*)?\]\]/g, (full, _bang: string, target: string) => {
+      const ext = extOf(target);
+      if (IMAGE_EXT.has(ext)) return note(placeholder(basename(target.trim()), true), full);
+      if (ATTACHMENT_EXT.has(ext)) return note(placeholder(basename(target.trim()), false), full);
+      return full;
+    });
+    out = out.replace(/!\[[^\]\n]*\]\(\s*(<[^>\n]+>|[^)\s]+)(?:\s+"[^"\n]*")?\s*\)/g, (full, raw: string) => {
+      const t = cleanMdTarget(raw);
+      if (isExternal(t)) return full;
+      const ext = extOf(t);
+      if (IMAGE_EXT.has(ext)) return note(placeholder(basename(t), true), full);
+      if (ATTACHMENT_EXT.has(ext)) return note(placeholder(basename(t), false), full);
+      return full;
+    });
+    return out;
   });
-  out = out.replace(/!\[[^\]\n]*\]\(\s*(<[^>\n]+>|[^)\s]+)(?:\s+"[^"\n]*")?\s*\)/g, (full, raw: string) => {
-    const t = cleanMdTarget(raw);
-    if (isExternal(t)) return full;
-    const ext = extOf(t);
-    if (IMAGE_EXT.has(ext)) return placeholder(basename(t), true);
-    if (ATTACHMENT_EXT.has(ext)) return placeholder(basename(t), false);
-    return full;
-  });
-  return out;
 }
 
 export type Section = { heading: string | null; text: string };
 
-/** Split Markdown into chunks no longer than `max`, remembering the nearest heading for each. */
+/**
+ * Split Markdown into chunks no longer than `max`, remembering the nearest heading for each. The chunks are an exact
+ * partition of the text: concatenating their `content` (with nothing in between) gives the input back, byte for byte.
+ */
 export function chunkMarkdown(markdown: string, max = 4000): { heading: string | null; content: string }[] {
-  const lines = markdown.split("\n");
-  const sections: Section[] = [];
-  let cur: Section = { heading: null, text: "" };
+  if (!markdown.trim()) return [];
+  const starts: { at: number; heading: string | null }[] = [{ at: 0, heading: null }];
   let inFence = false;
-  for (const line of lines) {
+  let pos = 0;
+  for (const line of markdown.split("\n")) {
     if (/^```/.test(line)) inFence = !inFence;
     const h = !inFence ? /^(#{1,6})\s+(.*?)\s*#*\s*$/.exec(line) : null;
     if (h) {
-      if (cur.text.trim()) sections.push(cur);
-      cur = { heading: h[2], text: `${line}\n` };
-    } else cur.text += `${line}\n`;
+      if (pos === 0) starts[0].heading = h[2];
+      else starts.push({ at: pos, heading: h[2] });
+    }
+    pos += line.length + 1;
   }
-  if (cur.text.trim()) sections.push(cur);
+  const sections = starts.map((s, i) => ({ heading: s.heading, text: markdown.slice(s.at, starts[i + 1]?.at ?? markdown.length) }));
   const out: { heading: string | null; content: string }[] = [];
   let acc: { heading: string | null; content: string } | null = null;
   const flush = () => {
-    if (acc && acc.content.trim()) out.push({ heading: acc.heading, content: acc.content.trimEnd() });
+    if (acc) out.push(acc);
     acc = null;
   };
   for (const s of sections) {
-    const text = s.text;
-    if (text.length > max) {
+    if (s.text.length > max) {
       flush();
-      for (let i = 0; i < text.length; i += max) out.push({ heading: s.heading, content: text.slice(i, i + max).trimEnd() });
+      for (let i = 0; i < s.text.length; i += max) out.push({ heading: s.heading, content: s.text.slice(i, i + max) });
       continue;
     }
-    if (acc && acc.content.length + text.length > max) flush();
-    acc = acc ? { heading: acc.heading, content: acc.content + text } : { heading: s.heading, content: text };
+    if (acc && acc.content.length + s.text.length > max) flush();
+    acc = acc ? { heading: acc.heading, content: acc.content + s.text } : { heading: s.heading, content: s.text };
   }
   flush();
-  return out.filter((c) => c.content.trim());
+  // a chunk that is only whitespace is not worth a row: fold it into its neighbour (the text stays complete)
+  const merged: typeof out = [];
+  for (const c of out) {
+    if (!c.content.trim() && merged.length) merged[merged.length - 1].content += c.content;
+    else merged.push(c);
+  }
+  if (merged.length > 1 && !merged[0].content.trim()) {
+    const first = merged.shift()!;
+    merged[0].content = first.content + merged[0].content;
+  }
+  return merged;
 }

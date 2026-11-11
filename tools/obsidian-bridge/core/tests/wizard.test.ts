@@ -100,3 +100,83 @@ describe("setup wizard steps (used by the Menu Bar app)", () => {
     await expect(runWizard("nope", {}, deps())).rejects.toThrow(/Unknown wizard step/);
   });
 });
+
+import { chmod } from "node:fs/promises";
+import { pairAndSave } from "../src/cli/pairing.js";
+import { loadConfig, saveConfig, validateConfig } from "../src/config/config.js";
+import type { CredentialStore } from "../src/security/keychain.js";
+
+describe("pairing is one code path with safe failure", () => {
+  const okFetch = (id: string) => async () => Response.json({ device_id: id, token: `tok_${id}_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789` });
+  const input = (vault: string, backup: string | null, over: Partial<Parameters<typeof pairAndSave>[2]> = {}) => ({ url: "https://l.example.com", code: "AAAA-BBBB", name: "Mac", vault, backup, external: null, allowUnencrypted: false, version: "0.1.0", ...over });
+
+  it("rejects a backup folder inside the vault, in every entry point", async () => {
+    const v = await makeVault();
+    cleanups.push(v.cleanup);
+    await mkdir(join(v.dir, "Backups"));
+    await expect(pairAndSave({ credentials: new MemoryCredentialStore(), fetch: okFetch("d1") }, null, input(v.dir, join(v.dir, "Backups")))).rejects.toThrow(/inside the vault/);
+    await expect(runWizard("pair", { url: "https://l.example.com", code: "X", vault: v.dir, backup: join(v.dir, "Backups") }, deps(okFetch("d1")))).rejects.toThrow(/inside the vault/);
+    await expect(readFile(join(home, "config.json"), "utf8")).rejects.toThrow();
+  });
+  it("storing the new token is attempted before anything old is touched, so a failure leaves the old pairing working", async () => {
+    const v = await makeVault();
+    cleanups.push(v.cleanup);
+    const b = await tmp("bk-");
+    const store = new MemoryCredentialStore();
+    await pairAndSave({ credentials: store, fetch: okFetch("old") }, null, input(v.dir, b));
+    const before = await loadConfig();
+    const failing: CredentialStore = { get: (a) => store.get(a), delete: (a) => store.delete(a), set: async () => { throw new Error("Keychain locked"); } };
+    await expect(pairAndSave({ credentials: failing, fetch: okFetch("new") }, before, input(v.dir, b))).rejects.toThrow(/Keychain locked/);
+    expect(await store.get("old")).toContain("tok_old");
+    expect((await loadConfig()).deviceId).toBe("old");
+  });
+  it("if the config cannot be written the new token is removed and the old one stays", async () => {
+    const v = await makeVault();
+    cleanups.push(v.cleanup);
+    const b = await tmp("bk-");
+    const store = new MemoryCredentialStore();
+    await pairAndSave({ credentials: store, fetch: okFetch("old") }, null, input(v.dir, b));
+    const prev = await loadConfig();
+    await chmod(home, 0o500);
+    cleanups.unshift(async () => chmod(home, 0o700));
+    await expect(pairAndSave({ credentials: store, fetch: okFetch("new") }, prev, input(v.dir, b))).rejects.toThrow();
+    await chmod(home, 0o700);
+    expect(await store.get("new")).toBeNull();
+    expect(await store.get("old")).toContain("tok_old");
+    expect((await loadConfig()).deviceId).toBe("old");
+  });
+  it("the old token is deleted only after the new pairing is saved", async () => {
+    const v = await makeVault();
+    cleanups.push(v.cleanup);
+    const b = await tmp("bk-");
+    const store = new MemoryCredentialStore();
+    await pairAndSave({ credentials: store, fetch: okFetch("old") }, null, input(v.dir, b));
+    const r = await pairAndSave({ credentials: store, fetch: okFetch("new") }, await loadConfig(), input(v.dir, b));
+    expect(r.repaired).toBe(true);
+    expect(await store.get("old")).toBeNull();
+    expect(await store.get("new")).toContain("tok_new");
+    expect((await loadConfig()).deviceId).toBe("new");
+  });
+  it("an earlier first-sync confirmation only carries over for the same vault and the same LifeOS", async () => {
+    const v = await makeVault();
+    const v2 = await makeVault();
+    cleanups.push(v.cleanup, v2.cleanup);
+    const b = await tmp("bk-");
+    const store = new MemoryCredentialStore();
+    await pairAndSave({ credentials: store, fetch: okFetch("a") }, null, input(v.dir, b));
+    await saveConfig({ ...(await loadConfig()), initialSyncConfirmedAt: "2026-11-11T00:00:00.000Z" });
+    await pairAndSave({ credentials: store }, await loadConfig(), input(v.dir, b, { code: undefined })); // same vault, keep pairing
+    expect((await loadConfig()).initialSyncConfirmedAt).toBe("2026-11-11T00:00:00.000Z");
+    await pairAndSave({ credentials: store }, await loadConfig(), input(v2.dir, b, { code: undefined })); // different vault
+    expect((await loadConfig()).initialSyncConfirmedAt).toBeUndefined();
+    await saveConfig({ ...(await loadConfig()), initialSyncConfirmedAt: "2026-11-11T00:00:00.000Z" });
+    await pairAndSave({ credentials: store }, await loadConfig(), input(v2.dir, b, { code: undefined, url: "https://other.example.com" }));
+    expect((await loadConfig()).initialSyncConfirmedAt).toBeUndefined();
+  });
+  it("needs a code when there is no pairing yet", async () => {
+    const v = await makeVault();
+    cleanups.push(v.cleanup);
+    await expect(pairAndSave({ credentials: new MemoryCredentialStore() }, null, input(v.dir, null, { code: undefined }))).rejects.toThrow(/pairing code is needed/);
+    void validateConfig;
+  });
+});

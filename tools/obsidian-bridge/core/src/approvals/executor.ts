@@ -9,6 +9,8 @@ import { atomicWrite, editFileSafely, exists, readText, resolveInVault, VaultFsE
 import { parseNote, replaceBody, setFrontmatterKey, UUID_RE } from "../vault/frontmatter.js";
 import { IMAGE_EXT } from "../vault/links.js";
 import { sha256 } from "../vault/scan.js";
+import { patchBody } from "../vault/patch.js";
+import { renderForUpload } from "../vault/links.js";
 import { lineDiff } from "../shared/diff.js";
 
 export type SafetyBackup = (reason: string) => Promise<{ ok: boolean; message?: string }>;
@@ -104,7 +106,7 @@ export async function executeCommand(cmd: ClaimedCommand, deps: ExecDeps): Promi
       const current = await readText(src.abs);
       if (!expected || sha256(current) !== expected) {
         const proposed = cmd.op === "edit_note" ? bodyOf(str(p, "new_content")) : null;
-        return { status: "conflict", message: "The note changed on the Mac after the proposal", conflict: { current_hash: sha256(current), diff: proposed === null ? null : lineDiff(parseNote(current).body, proposed) } };
+        return { status: "conflict", message: "The note changed on the Mac after the proposal", conflict: { current_hash: sha256(current), diff: proposed === null ? null : lineDiff(renderForUpload(parseNote(current).body), proposed) } };
       }
     }
 
@@ -131,10 +133,13 @@ export async function executeCommand(cmd: ClaimedCommand, deps: ExecDeps): Promi
         let conflict: Conflict | null = null;
         const done = await editFileSafely(src!.abs, (t) => {
           if (sha256(t) !== expected) {
-            conflict = new Conflict(lineDiff(parseNote(t).body, body), sha256(t));
+            conflict = new Conflict(lineDiff(renderForUpload(parseNote(t).body), body), sha256(t));
             return t;
           }
-          return replaceBody(t, body);
+          // apply only what Claude changed, so images and attachments it could not see stay in the note
+          const patched = patchBody(parseNote(t).body, body);
+          if (patched === null) throw new Refuse("The change is too different from the note to apply safely. Ask Claude for a smaller edit.");
+          return replaceBody(t, patched);
         });
         if (conflict || !done) {
           const c = conflict as Conflict | null;

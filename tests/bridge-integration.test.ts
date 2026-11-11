@@ -370,6 +370,70 @@ describe("Claude over MCP, start to finish", () => {
   });
 });
 
+describe("review fixes, end to end", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function mcp(name: string, args: Record<string, unknown>): Promise<any> {
+    const res = await handleMcpPost(new Request("http://x/api/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) }));
+    const body = (await res.json()) as { result: { content: { text: string }[]; isError?: boolean } };
+    return { isError: !!body.result.isError, ...(JSON.parse(body.result.content[0].text.startsWith("{") ? body.result.content[0].text : "{}") as object), text: body.result.content[0].text };
+  }
+
+  it("deleting a big shared folder (more than the brake allows) removes every synced copy", async () => {
+    for (let i = 1; i <= 14; i++) await write(`Old/n${i}.md`, NOTE(ID(i), true, `obsolete zebra ${i}`));
+    await write("Keep/k.md", NOTE(ID(99), true, "keep me"));
+    const { svc } = await pairedService();
+    await svc.syncNow();
+    expect((await mcp("search_obsidian_knowledge", { query: "zebra" })).total).toBe(14);
+    expect((await mcp("propose_delete_folder", { path: "Old" })).summary).toMatch(/14 synced notes/);
+    const row = await env.DB.prepare("SELECT id FROM pending_actions WHERE status = 'pending'").first<{ id: string }>();
+    await approvePending(row!.id, "+07:00");
+    await svc.pollOnce();
+    await svc.syncNow();
+    expect((await mcp("search_obsidian_knowledge", { query: "zebra" })).results).toEqual([]);
+    expect((await mcp("search_obsidian_knowledge", { query: "keep me" })).results).toHaveLength(1);
+    expect(svc.status().lastError ?? null).toBeNull();
+  });
+  it("the folder impact counts every shared note, not just the first 200", async () => {
+    const { upload } = await import("@/modules/obsidian/documents");
+    for (let i = 1; i <= 250; i++) await upload("d", { id: ID(i), kind: "note", title: `N${i}`, path: `Big/N${i}.md`, content_hash: `h${i}-xxxx`, tags: [], grant_version: 0, sync_version: 1, total_chunks: 1, chunks: [{ index: 0, content: `text ${i}` }] });
+    const r = await mcp("propose_delete_folder", { path: "Big" });
+    expect(r.summary).toMatch(/250 synced notes/);
+  });
+  it.skipIf(!existsSync(HELPER) || !existsSync(join(process.cwd(), "tools/obsidian-bridge/core/native/bin/make-fixture")))("a PDF the owner re-enabled is uploaded again", async () => {
+    const { execFileSync } = await import("node:child_process");
+    execFileSync(join(process.cwd(), "tools/obsidian-bridge/core/native/bin/make-fixture"), [join(dir, "db.pdf"), "Helvetica", "Normalization removes redundancy"]);
+    await write("DB.md", NOTE(ID(1), true, "Lecture ![[db.pdf]]"));
+    const { svc } = await pairedService();
+    await svc.syncNow();
+    const hit = (await searchKnowledge({ q: "Normalization" })).results[0];
+    await revokeDocument(hit.document_id);
+    await svc.pollOnce();
+    expect((await searchKnowledge({ q: "Normalization" })).results).toEqual([]);
+    await reenableDocument(hit.document_id);
+    await svc.pollOnce();
+    await svc.syncNow();
+    expect((await searchKnowledge({ q: "Normalization" })).results[0]).toMatchObject({ kind: "pdf", page: 1 });
+  });
+});
+
+describe("re-enable while the Mac never saw the revoke", () => {
+  it.skipIf(!existsSync(HELPER) || !existsSync(join(process.cwd(), "tools/obsidian-bridge/core/native/bin/make-fixture")))("a PDF revoked and re-enabled while the Mac was away is uploaded again", async () => {
+    const { execFileSync } = await import("node:child_process");
+    execFileSync(join(process.cwd(), "tools/obsidian-bridge/core/native/bin/make-fixture"), [join(dir, "db.pdf"), "Helvetica", "Normalization removes redundancy"]);
+    await write("DB.md", NOTE(ID(1), true, "Lecture ![[db.pdf]]"));
+    const { svc } = await pairedService();
+    await svc.syncNow();
+    const hit = (await searchKnowledge({ q: "Normalization" })).results[0];
+    offline = true;
+    await revokeDocument(hit.document_id);
+    await reenableDocument(hit.document_id); // the Mac only ever sees the final "re-enabled" state
+    offline = false;
+    await svc.pollOnce();
+    await svc.syncNow();
+    expect((await searchKnowledge({ q: "Normalization" })).results[0]).toMatchObject({ kind: "pdf", page: 1 });
+  });
+});
+
 describe("network trouble", () => {
   it("polls every 15 seconds when healthy, backs off (bounded) when offline, and recovers", async () => {
     const { svc } = await pairedService();
