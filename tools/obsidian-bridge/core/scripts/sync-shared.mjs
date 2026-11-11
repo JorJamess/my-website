@@ -9,5 +9,5 @@ const here = dirname(fileURLToPath(import.meta.url));
 const from = join(here, "../../../../src/lib/obsidian");
 const to = join(here, "../src/shared");
 mkdirSync(to, { recursive: true });
-for (const f of ["secrets.ts", "paths.ts", "chunk.ts", "crypto.ts"]) copyFileSync(join(from, f), join(to, f));
+for (const f of ["secrets.ts", "paths.ts", "chunk.ts", "crypto.ts", "diff.ts"]) copyFileSync(join(from, f), join(to, f));
 console.log("shared files copied");

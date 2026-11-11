@@ -414,7 +414,7 @@ describe("network trouble", () => {
 
 // The Worker and the Bridge must apply exactly the same secret rules, path rules and chunk sizes.
 describe("shared code stays identical", () => {
-  for (const f of ["secrets.ts", "paths.ts", "chunk.ts", "crypto.ts"]) {
+  for (const f of ["secrets.ts", "paths.ts", "chunk.ts", "crypto.ts", "diff.ts"]) {
     it(`${f}: the Bridge copy matches src/lib/obsidian (run npm run sync-shared in tools/obsidian-bridge/core)`, () => {
       expect(readFileSync(join(process.cwd(), "tools/obsidian-bridge/core/src/shared", f), "utf8")).toBe(readFileSync(join(process.cwd(), "src/lib/obsidian", f), "utf8"));
     });

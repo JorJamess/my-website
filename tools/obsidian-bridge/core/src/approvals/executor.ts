@@ -9,7 +9,7 @@ import { atomicWrite, editFileSafely, exists, readText, resolveInVault, VaultFsE
 import { parseNote, replaceBody, setFrontmatterKey, UUID_RE } from "../vault/frontmatter.js";
 import { IMAGE_EXT } from "../vault/links.js";
 import { sha256 } from "../vault/scan.js";
-import { lineDiff } from "./diff.js";
+import { lineDiff } from "../shared/diff.js";
 
 export type SafetyBackup = (reason: string) => Promise<{ ok: boolean; message?: string }>;
 export type ExecDeps = { cfg: BridgeConfig; log: Logger; safetyBackup: SafetyBackup; now?: () => number };

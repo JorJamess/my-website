@@ -22,7 +22,10 @@ export function lineDiff(a: string, b: string, context = 3, maxChars = 200_000):
     let i = 0;
     let j = 0;
     while (i < n && j < m) {
-      if (midA[i] === midB[j]) ops.push(` ${midA[i++]}`), j++;
+      if (midA[i] === midB[j]) {
+        ops.push(` ${midA[i++]}`);
+        j++;
+      }
       else if (dp[(i + 1) * w + j] >= dp[i * w + j + 1]) ops.push(`-${midA[i++]}`);
       else ops.push(`+${midB[j++]}`);
     }

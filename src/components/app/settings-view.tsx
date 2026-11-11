@@ -8,6 +8,7 @@ import { useData } from "@/lib/client/use-data";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Pupu, PUPU_POSE_LABELS, PUPU_POSES } from "./pupu";
+import { ObsidianSettings } from "./obsidian-settings";
 
 type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 
@@ -29,6 +30,7 @@ export function SettingsView() {
       <h1 className="text-[26px] font-medium tracking-tight">Settings</h1>
       <Visits />
       <Backups />
+      <ObsidianSettings />
       <Security />
       <InstallApp />
       <MeetPupu />

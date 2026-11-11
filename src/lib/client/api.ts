@@ -3,6 +3,7 @@
 import type { Analytics } from "@/modules/analytics/repo";
 import type { CalendarItems } from "@/modules/calendar/repo";
 import type { AuditEntry, PendingAction } from "@/lib/types";
+import type { getObsidianStatus, ObsidianDoc } from "@/modules/obsidian/documents";
 import type { CalendarEvent, Category, EventColor, GoalDetail, GoalOverview, HabitOverview, Note, NoteDetail, NoteFolder, SearchAllResult, Summary, Todo } from "@/lib/types";
 import type { MoneyCalendar, MoneySummary, MoneyTransaction } from "@/lib/money-types";
 import type { EventCreateInput, EventUpdateInput, NoteCreateInput, NoteUpdateInput, NoteLinkInput, TodoCreateInput, TodoUpdateInput, HabitCreateInput, HabitUpdateInput, CheckinInput, GoalCreateInput, GoalUpdateInput, MilestoneCreateInput, MilestoneUpdateInput, GoalLinkInput } from "@/lib/schemas";
@@ -159,6 +160,19 @@ export const api = {
     ).then((r) => r.preview),
   restore: (key: string) =>
     request<{ ok: true; restored: Record<string, number> }>("/api/backups/restore", json("POST", { key, confirm: true })),
+  obsidianStatus: () => request<Awaited<ReturnType<typeof getObsidianStatus>>>("/api/obsidian/status"),
+  obsidianDocuments: (status?: string) => request<{ documents: ObsidianDoc[] }>(`/api/obsidian/documents${status ? `?status=${status}` : ""}`).then((r) => r.documents),
+  obsidianFindings: () =>
+    request<{ findings: { id: string; document_id: string; kind: string; line: number; redacted: string; status: string; title: string; path: string }[] }>("/api/obsidian/findings").then((r) => r.findings),
+  obsidianExceptFinding: (id: string) => request<{ ok: true }>(`/api/obsidian/findings/${id}`, json("POST")),
+  obsidianPair: () => request<{ code: string; expires_at: string }>("/api/obsidian/pair", json("POST")),
+  obsidianDevice: (id: string, action: "revoke" | "pause" | "resume" | "sync") => request<{ ok: true }>(`/api/obsidian/devices/${id}`, json("POST", { action })),
+  obsidianRevoke: (id: string) => request<{ grant_version: number }>(`/api/obsidian/documents/${encodeURIComponent(id)}/revoke`, json("POST", {})),
+  obsidianReenable: (id: string) => request<{ grant_version: number }>(`/api/obsidian/documents/${encodeURIComponent(id)}/reenable`, json("POST")),
+  obsidianCommands: () =>
+    request<{ commands: { id: string; pending_id: string; op: string; status: string; summary: string | null; secret_findings: number; created_at: string; expires_at: string; approved_at: string | null; finished_at: string | null; result: string | null }[] }>("/api/obsidian/commands").then((r) => r.commands),
+  obsidianPreview: (pendingId: string) =>
+    request<{ id: string; op: string; summary: string; status: string; ttl_seconds: number; expires_at: string; secret_findings: number; result: string | null; payload: Record<string, unknown> | null; diff: string | null }>(`/api/obsidian/commands/${pendingId}`),
   backupNow: () => request<{ backup: { key: string } }>("/api/backups", json("POST")),
 
   messages: () =>

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ClaimedCommand } from "../src/cloudflare/client.js";
 import { executeCommand, folderImpact, noBackupConfigured, type SafetyBackup } from "../src/approvals/executor.js";
-import { lineDiff } from "../src/approvals/diff.js";
+import { lineDiff } from "../src/shared/diff.js";
 import { parseNote } from "../src/vault/frontmatter.js";
 import { sha256 } from "../src/vault/scan.js";
 import { silentLogger } from "../src/logging.js";

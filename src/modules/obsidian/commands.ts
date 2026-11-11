@@ -200,14 +200,19 @@ export async function previewCommand(pendingId: string) {
   if (!cmd) return null;
   let payload: unknown = null;
   if (cmd.payload_enc) payload = JSON.parse(await decryptPayload(await key(), cmd.id, cmd.payload_enc));
-  return { id: cmd.id, op: cmd.op, status: cmd.status, expires_at: cmd.expires_at, secret_findings: cmd.secret_findings, result: cmd.result, payload };
+  const { db } = await ctx();
+  const p = await db.prepare("SELECT summary FROM pending_actions WHERE id = ?").bind(pendingId).first<{ summary: string }>();
+  return { id: cmd.id, op: cmd.op, summary: p?.summary ?? cmd.op, status: cmd.status, ttl_seconds: cmd.ttl_seconds, expires_at: cmd.expires_at, secret_findings: cmd.secret_findings, result: cmd.result, payload };
 }
 
 export async function listCommands(limit = 30) {
   const { db } = await ctx();
   await expireCommands();
   const { results } = await db
-    .prepare("SELECT id, pending_id, op, status, secret_findings, attempts, created_at, expires_at, approved_at, finished_at, result FROM obsidian_commands ORDER BY created_at DESC LIMIT ?")
+    .prepare(
+      `SELECT c.id, c.pending_id, c.op, c.status, c.secret_findings, c.attempts, c.created_at, c.expires_at, c.approved_at, c.finished_at, c.result, p.summary
+       FROM obsidian_commands c LEFT JOIN pending_actions p ON p.id = c.pending_id ORDER BY c.created_at DESC LIMIT ?`,
+    )
     .bind(Math.min(limit, 100))
     .all();
   return results;

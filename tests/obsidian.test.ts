@@ -717,3 +717,18 @@ describe("code review fixes", () => {
     await expect(upload("dev", doc(2, { path: ".trash/old.md" }))).rejects.toMatchObject({ code: "bad_request" });
   });
 });
+
+describe("approval screen data", () => {
+  it("lists commands with their summary and no content", async () => {
+    await upload("dev", doc(1));
+    await queueVaultProposal({ op: "create_note", payload: { path: "a.md", content: "TOPSECRETBODY" }, summary: "Create note “a.md” (13 characters)" });
+    const list = (await listCommands()) as { summary: string | null; status: string }[];
+    expect(list[0]).toMatchObject({ summary: "Create note “a.md” (13 characters)", status: "awaiting_approval" });
+    expect(JSON.stringify(list)).not.toContain("TOPSECRETBODY");
+  });
+  it("preview for an edit includes the summary, lifetime and the proposed text", async () => {
+    const q = await queueVaultProposal({ op: "edit_note", payload: { path: "a.md", new_content: "new body", expected_hash: "h" }, summary: "Edit note “a.md”" });
+    const p = await previewCommand(q.pending_id);
+    expect(p).toMatchObject({ op: "edit_note", summary: "Edit note “a.md”", ttl_seconds: 7 * 86400, payload: { new_content: "new body" } });
+  });
+});

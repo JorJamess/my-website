@@ -1,7 +1,7 @@
 import { constants } from "node:fs";
 import { copyFile, lstat, mkdir, readdir, readFile, readlink, rename, rm, stat, symlink } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { lineDiff } from "../approvals/diff.js";
+import { lineDiff } from "../shared/diff.js";
 import { BackupError, hashOf, inside, listSnapshots, snapshotFilesDir, verifySnapshot, type ManifestEntry, type SnapshotManifest } from "./store.js";
 
 export type Resolution = "keep_both" | "keep_current" | "restore_backup";

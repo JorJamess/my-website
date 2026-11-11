@@ -9,6 +9,7 @@ import type { ActionRisk, PendingAction } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Pupu } from "./pupu";
+import { VaultQueues, VaultReview } from "./obsidian-approvals";
 
 const ICON: Record<ActionRisk, typeof Trash2> = { delete: Trash2, edit: ListChecks, link: ListChecks, vault: ListChecks };
 
@@ -30,7 +31,7 @@ export function ApprovalsView() {
     try {
       const r = await api.decideApproval(p.id, decision);
       if (r.status === "failed") toast.error(r.note ? `Couldn't apply it: ${r.note}` : "Couldn't apply it");
-      else toast.success(decision === "approve" ? "Approved and done" : "Rejected");
+      else toast.success(decision === "reject" ? "Rejected" : p.risk === "vault" ? "Approved. Your Mac applies it when it is online" : "Approved and done");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "That request is no longer waiting");
     } finally {
@@ -48,7 +49,7 @@ export function ApprovalsView() {
           <h1 className="text-[26px] font-medium tracking-tight">Approvals</h1>
           {pending.length > 0 && <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs">{pending.length} waiting</span>}
         </div>
-        <p className="mt-1 text-[14px] text-muted-foreground">Claude asked to make these changes. Nothing happens until you say yes. Requests expire after 7 days.</p>
+        <p className="mt-1 text-[14px] text-muted-foreground">Claude asked to make these changes. Nothing happens until you say yes. Requests expire after 7 days; changes to your Obsidian vault have their own time limits (shown when you review them).</p>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -71,6 +72,7 @@ export function ApprovalsView() {
                   <span className="shrink-0 text-xs text-muted-foreground">{ago(p.created_at)}</span>
                 </div>
                 {p.risk === "delete" && <p className="mt-1 ml-6 text-[13px] text-muted-foreground">This can&rsquo;t be undone.</p>}
+                {p.risk === "vault" && <VaultReview pendingId={p.id} />}
                 <div className="mt-3 ml-6 flex gap-2">
                   <Button size="sm" className="px-3" disabled={busy === p.id} onClick={() => decide(p, "approve")}>
                     {busy === p.id && <Loader2 className="animate-spin" />}
@@ -85,6 +87,8 @@ export function ApprovalsView() {
           })}
         </ul>
       )}
+
+      <VaultQueues refreshKey={data} />
 
       <section aria-label="Recent activity">
         <h2 className="mb-1 text-xs text-muted-foreground">Recent activity</h2>
