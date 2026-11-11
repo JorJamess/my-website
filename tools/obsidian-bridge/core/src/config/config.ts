@@ -11,7 +11,16 @@ export type BridgeConfig = {
   vaultName: string;
   deviceName: string;
   deviceId?: string;
-  backup: { localPath: string | null; externalPath: string | null };
+  backup: {
+    localPath: string | null;
+    externalPath: string | null;
+    /** the external drive is found by this id, so it works whichever name or path macOS gives it */
+    externalVolumeUuid?: string | null;
+    /** folder on that drive */
+    externalSubpath?: string | null;
+    /** the owner accepted backing up to a drive that is not encrypted */
+    allowUnencrypted?: boolean;
+  };
   /** Obsidian's trash folder inside the vault (deleted items are moved here, never removed) */
   trashFolder: string;
   pollSeconds: number;
@@ -80,7 +89,13 @@ export function validateConfig(raw: unknown): BridgeConfig {
     vaultName: str("vaultName")!,
     deviceName: str("deviceName")!,
     deviceId: str("deviceId", { optional: true }),
-    backup: { localPath: optPath("localPath"), externalPath: optPath("externalPath") },
+    backup: {
+      localPath: optPath("localPath"),
+      externalPath: optPath("externalPath"),
+      externalVolumeUuid: typeof backup.externalVolumeUuid === "string" && backup.externalVolumeUuid ? backup.externalVolumeUuid : null,
+      externalSubpath: typeof backup.externalSubpath === "string" ? backup.externalSubpath : null,
+      allowUnencrypted: backup.allowUnencrypted === true,
+    },
     trashFolder: trash,
     pollSeconds,
     pdfMaxBytes: pdfMax,

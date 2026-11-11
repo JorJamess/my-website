@@ -2,7 +2,7 @@
 
 A small service that runs on your Mac. It sends **only the notes you marked** to LifeOS so Claude can search and read them, and it applies changes you approved in LifeOS. Obsidian stays the source of truth: your vault never leaves the Mac.
 
-Status: the Core (TypeScript) and the command line are done. The Menu Bar app, backups and restore come in later phases (see `docs/adr/0002-obsidian-bridge.md`).
+Status: the Core (TypeScript), the command line, backups and restore are done. The Menu Bar app comes in a later phase (see `docs/adr/0002-obsidian-bridge.md`).
 
 ## How it decides what to share
 - A note is shared only if its frontmatter has `lifeos_sync: true` (the exact word `true`). No flag, `false`, `"true"` in quotes or `yes` all mean "not shared".
@@ -21,7 +21,7 @@ Setup asks for your vault, a backup folder, checks FileVault, pairs with a one-t
 To start at login: `tools/obsidian-bridge/scripts/install.sh` (asks first, no root). Remove with `uninstall.sh`.
 
 ## Commands
-`setup`, `status`, `doctor`, `sync`, `pause`, `resume`, `backup` and `restore` (not available yet), `logs`, `pair`, `unpair`, `reenable <note id>`, `run`, `version`. Use `obsidian-bridge help <command>`.
+`setup`, `status`, `doctor`, `sync`, `pause`, `resume`, `backup [list]`, `restore preview|--new-vault|--merge`, `logs`, `pair`, `unpair`, `reenable <note id>`, `run`, `version`. Use `obsidian-bridge help <command>`.
 
 ## Security
 - The device token is in the macOS Keychain, never in a file, the vault or Git. Config and state files are private to your user (0600).
@@ -31,7 +31,7 @@ To start at login: `tools/obsidian-bridge/scripts/install.sh` (asks first, no ro
 - Paths are validated on every operation: no `..`, no hidden folders (`.obsidian`, `.trash`), no symlinks leaving the vault, and existing files are never overwritten.
 
 ## Approved changes from Claude
-Claude can propose creating, editing, renaming, moving and deleting notes and folders. Nothing happens until you approve in LifeOS. The Mac then checks that the approval hasn't expired, the path is safe, nothing is in the way, the note is unchanged since the proposal (otherwise it stops with a diff and asks for a fresh approval), and a safety backup exists for anything that changes or removes existing content. Deleted items go to Obsidian's `.trash`, never removed. Until backups are set up (next phase), edits, moves and deletes are refused on purpose.
+Claude can propose creating, editing, renaming, moving and deleting notes and folders. Nothing happens until you approve in LifeOS. The Mac then checks that the approval hasn't expired, the path is safe, nothing is in the way, the note is unchanged since the proposal (otherwise it stops with a diff and asks for a fresh approval), and a safety backup exists for anything that changes or removes existing content. Deleted items go to Obsidian's `.trash`, never removed. If the local backup cannot be made, edits, moves and deletes are refused on purpose.
 
 ## Offline behaviour
 Polling is every 15 seconds, with bounded backoff (up to about 5 minutes) when offline; it checks again straight away after sleep. If the Mac is off, Claude can still search what was synced earlier, and approved changes wait. Revoking a note in LifeOS removes it from the cloud at once; the Mac applies the change (turns `lifeos_sync` off) when it reconnects, and a revoked note is never uploaded again until you re-enable it.
@@ -42,3 +42,12 @@ cd tools/obsidian-bridge/core && npm test
 ```
 The website's own test suite also runs the Bridge against the real Worker routes (`tests/bridge-integration.test.ts`).
 `src/shared/` holds copies of files from the website (`npm run sync-shared`); a test fails if they drift.
+
+## Backups and restore
+- Everything in the vault is backed up: notes, folders (including empty ones), PDFs, images, templates, `.obsidian` settings and plugins, `.trash`, hidden files. Left out: only `*.bridge-tmp` files the Bridge itself writes, and `.DS_Store`. Tokens and Keychain entries are not in the vault, so they are never backed up.
+- Destinations: the local folder (required) and an external SSD (optional, found by its volume id wherever macOS mounts it). Each is reported separately and only counts as successful after verification.
+- Schedule (Mac's local time): daily 02:00 keep 7, Sunday 02:00 keep 4, the 1st at 02:00 keep 3. A missed night runs once when the Mac is back. One backup can carry several labels without a duplicate copy. Safety backups (before Claude changes something) keep the newest 10; manual ones the newest 5.
+- Every restore point is a complete folder on its own. Unchanged files in daily backups are hard links to the previous one; the first, weekly and monthly backups copy every file. Deleting an old backup never affects another.
+- Verification is basic: manifest present, file count and paths match, sizes match, every file readable. It is not a full checksum scan.
+- Restore: `restore preview` changes nothing; `--new-vault <folder>` restores into a new folder; `--merge` makes a safety backup, adds missing files, skips identical ones, and for files that differ lets you keep current, keep both (a "(restored …)" copy; links inside notes are not rewritten) or restore the backup version (needs explicit confirmation).
+- Backup to an unencrypted drive is refused unless you accepted that warning during setup. The Bridge never formats a drive.

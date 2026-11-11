@@ -16,6 +16,8 @@ import { syncVault, SyncNotConfirmedError } from "../sync/engine.js";
 import { previewInitialSync, type InitialPreview } from "../sync/preview.js";
 import { loadState, saveState } from "../sync/state.js";
 import { walkVault } from "../vault/fs-safe.js";
+import { backupCommand, restoreCommand } from "./backup-cmd.js";
+import { MacVolumes } from "../backup/volumes.js";
 import { canReadWrite, fileVaultOn, fmtBytes, freeBytes, nodeOk, volumeEncrypted, type Check } from "./system.js";
 
 const VERSION = "0.1.0";
@@ -29,8 +31,8 @@ const HELP: Record<string, string> = {
   sync: "obsidian-bridge sync [--confirm-initial]\n  Syncs now. The very first sync needs --confirm-initial after you reviewed the preview.",
   pause: "obsidian-bridge pause\n  Stops syncing and applying approved changes until you run resume. Revocations from LifeOS are still applied.",
   resume: "obsidian-bridge resume\n  Starts syncing again.",
-  backup: "obsidian-bridge backup [list]\n  Vault backups. (Arrives in the backup phase; not available yet.)",
-  restore: "obsidian-bridge restore [preview]\n  Restore from a backup. (Arrives in the backup phase; not available yet.)",
+  backup: "obsidian-bridge backup [list] [--full]\n  Backs up the whole vault now (notes, PDFs, images, templates, .obsidian settings, everything) to the local folder and the external SSD if connected. Each result is verified before it counts.\n  'backup list' shows every restore point. Scheduled backups run by themselves: daily 02:00 (keep 7), Sunday 02:00 (keep 4), the 1st 02:00 (keep 3).",
+  restore: "obsidian-bridge restore preview [id] [--browse [folder]] [--from local|external]\nobsidian-bridge restore <id> --new-vault <folder>\nobsidian-bridge restore <id> --merge [--keep-both | --keep-current | --overwrite --confirm-overwrite]\n  preview: lists restore points, or shows one. Changes nothing.\n  --new-vault: restores everything into a new folder; your vault is not touched.\n  --merge: adds missing files into your vault (after a safety backup), skips identical ones, and asks what to do with files that differ.",
   logs: "obsidian-bridge logs [-n <lines>]\n  Prints the last lines of the Bridge log (default 50). Logs never contain note text or secrets.",
   pair: "obsidian-bridge pair [--code <code>]\n  Pairs this Mac with LifeOS using a one-time code from Settings → Obsidian. The device token goes into the macOS Keychain.",
   unpair: "obsidian-bridge unpair\n  Tells LifeOS to forget this Mac and removes the token from the Keychain.",
@@ -112,6 +114,7 @@ async function setup(flags: Record<string, string | true>) {
 
     const extRaw = typeof flags.external === "string" ? flags.external : rl ? (await rl.question("External SSD backup folder (Enter to skip, add later): ")).trim() : "";
     const externalPath = extRaw ? resolve(extRaw) : null;
+    const extInfo = externalPath ? await new MacVolumes().info(externalPath) : null;
     if (externalPath && !(await canReadWrite(externalPath))) out("  ! The external folder isn't available right now. It will be skipped until the drive is connected.");
 
     const fv = await fileVaultOn();
@@ -138,7 +141,13 @@ async function setup(flags: Record<string, string | true>) {
       vaultName: vaultPath.split("/").pop() ?? "Vault",
       deviceName,
       deviceId: prev?.deviceId,
-      backup: { localPath: backupPath, externalPath },
+      backup: {
+        localPath: backupPath,
+        externalPath,
+        externalVolumeUuid: extInfo?.uuid ?? null,
+        externalSubpath: extInfo?.mountPoint && externalPath ? relative(extInfo.mountPoint, externalPath) : null,
+        allowUnencrypted: needAck,
+      },
       trashFolder: prev?.trashFolder ?? ".trash",
       pollSeconds: prev?.pollSeconds ?? 15,
       pdfMaxBytes: prev?.pdfMaxBytes ?? 100 * 1024 * 1024,
@@ -246,7 +255,10 @@ async function status(flags: Record<string, string | true>) {
   const pdfs = Object.values(state.pdfs).reduce<Record<string, number>>((a, d) => ((a[d.status] = (a[d.status] ?? 0) + 1), a), {});
   out(`PDFs        ${Object.entries(pdfs).map(([k, v]) => `${v} ${k}`).join(", ") || "none"}`);
   if (s) out(`Waiting     ${s.pendingCommands} approved change(s) for this Mac; ${s.usageToday.requests} requests today (${s.usageToday.polls} polls)`);
-  out(`Backups     not available yet (next phase)`);
+  const bs = s?.backup as { local?: { status: string; lastSuccessAt?: string; message?: string }; external?: { status: string; lastSuccessAt?: string; message?: string } } | undefined;
+  const bl = (b?: { status: string; lastSuccessAt?: string; message?: string }) => (b ? `${b.status === "ok" ? "ok" : b.status}${b.lastSuccessAt ? `, last success ${b.lastSuccessAt}` : ""}${b.status !== "ok" && b.message ? ` (${b.message})` : ""}` : "no result yet");
+  out(`Backup      local: ${cfg.backup.localPath ? bl(state.backup.local ?? bs?.local) : "not set up"}`);
+  out(`            external SSD: ${cfg.backup.externalPath || cfg.backup.externalVolumeUuid ? bl(state.backup.external ?? bs?.external) : "not set up"}`);
   return 0;
 }
 
@@ -273,7 +285,8 @@ async function oneShotSync(confirmInitial: boolean) {
 async function run() {
   const { cfg, p, state } = await loadAll();
   const log = fileLogger(p.log, (l) => process.stdout.write(l + "\n"));
-  const svc = new BridgeService({ cfg, configFile: p.config, stateFile: p.state, socketPath: p.socket, state, credentials: new MacKeychain(), extractPdf: createPdfExtractor(helperPath(), { maxBytes: cfg.pdfMaxBytes }), log });
+  const backups = cfg.backup.localPath ? new (await import("../backup/manager.js")).BackupManager({ vaultPath: cfg.vaultPath, vaultName: cfg.vaultName, settings: cfg.backup, volumes: new MacVolumes(), log }) : undefined;
+  const svc = new BridgeService({ cfg, configFile: p.config, stateFile: p.state, socketPath: p.socket, state, credentials: new MacKeychain(), extractPdf: createPdfExtractor(helperPath(), { maxBytes: cfg.pdfMaxBytes }), log, backups });
   await svc.start();
   const quit = () => void svc.stop().then(() => process.exit(0));
   process.on("SIGTERM", quit);
@@ -352,9 +365,9 @@ export async function main(argv: string[]): Promise<number> {
         return 0;
       }
       case "backup":
+        return await backupCommand(await loadConfig(), words, flags);
       case "restore":
-        err(`"${cmd}${words[1] ? " " + words[1] : ""}" is not available yet: vault backup and restore arrive in the next phase. Nothing was changed.`);
-        return 2;
+        return await restoreCommand(await loadConfig(), words, flags);
       case "logs": {
         const n = Math.min(Math.max(Number(flags.n ?? 50) || 50, 1), 1000);
         const text = await readFile(paths().log, "utf8").catch(() => "");

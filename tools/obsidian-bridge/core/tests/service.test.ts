@@ -12,6 +12,9 @@ import { redact } from "../src/logging.js";
 import { main } from "../src/cli/main.js";
 import { createPdfExtractor } from "../src/pdf/extract.js";
 import { ID, makeVault, NOTE, NATIVE } from "./helpers/vault.js";
+import { BackupManager } from "../src/backup/manager.js";
+import { listSnapshots } from "../src/backup/store.js";
+import type { VolumeProvider } from "../src/backup/volumes.js";
 
 const cleanups: (() => Promise<unknown>)[] = [];
 afterEach(async () => {
@@ -167,12 +170,82 @@ describe("command line", () => {
     }
     expect((await capture([])).text).toContain("setup");
   });
-  it("prints the version, reports unknown commands, and says backup is not available yet", async () => {
-    expect((await capture(["version"])).text.trim()).toMatch(/^\d+\.\d+\.\d+$/);
-    expect((await capture(["bogus"])).code).toBe(1);
-    const b = await capture(["backup", "list"]);
-    expect(b.code).toBe(2);
-    expect(b.text).toMatch(/not available yet/);
-    expect((await capture(["restore", "preview"])).code).toBe(2);
+  it("prints the version, reports unknown commands, and asks for setup when nothing is configured", async () => {
+    const home = await realpath(await mkdtemp(join(tmpdir(), "emptyhome-")));
+    cleanups.push(() => rm(home, { recursive: true, force: true }));
+    const prev = process.env.OBSIDIAN_BRIDGE_HOME;
+    process.env.OBSIDIAN_BRIDGE_HOME = home;
+    try {
+      expect((await capture(["version"])).text.trim()).toMatch(/^\d+\.\d+\.\d+$/);
+      expect((await capture(["bogus"])).code).toBe(1);
+      const b = await capture(["backup", "list"]);
+      expect(b.code).toBe(1);
+      expect(b.text).toMatch(/setup/);
+      expect((await capture(["restore", "preview"])).code).toBe(1);
+    } finally {
+      if (prev === undefined) delete process.env.OBSIDIAN_BRIDGE_HOME;
+      else process.env.OBSIDIAN_BRIDGE_HOME = prev;
+    }
+  });
+});
+
+describe("backups inside the service", () => {
+  const volumes: VolumeProvider = { info: async () => ({ uuid: "u", mountPoint: "/", name: "x", encrypted: true }), findByUuid: async () => null };
+  async function withBackups(now: () => Date) {
+    const v = await makeVault();
+    const dest = await realpath(await mkdtemp(join(tmpdir(), "svc-bk-")));
+    cleanups.push(v.cleanup, () => rm(dest, { recursive: true, force: true }));
+    await v.write("a.md", NOTE(ID(1), true, "hello"));
+    const backups = new BackupManager({ vaultPath: v.dir, vaultName: "T", settings: { localPath: dest, externalPath: null }, volumes, log: silentLogger, now });
+    const home = await realpath(await mkdtemp(join(tmpdir(), "bh-")));
+    cleanups.push(() => rm(home, { recursive: true, force: true }));
+    const creds = new MemoryCredentialStore();
+    await creds.set("dev1", "token-token-token-token-1");
+    const cfg: BridgeConfig = { version: 1, lifeosUrl: "https://x.test", vaultPath: v.dir, vaultName: "T", deviceName: "M", deviceId: "dev1", backup: { localPath: dest, externalPath: null }, trashFolder: ".trash", pollSeconds: 15, pdfMaxBytes: 1e8, initialSyncConfirmedAt: new Date().toISOString() };
+    const beats: Record<string, unknown>[] = [];
+    const svc = new BridgeService({
+      cfg, configFile: join(home, "config.json"), stateFile: join(home, "state.json"), socketPath: join(home, "b.sock"), state: emptyState(), credentials: creds,
+      extractPdf: createPdfExtractor(join(NATIVE, "pdf-text")), log: silentLogger, backups,
+      fetch: async (url, init) => {
+        if (url.includes("/heartbeat")) beats.push(JSON.parse(String(init?.body)));
+        return Response.json(url.includes("/poll") ? POLL : { ok: true, status: "synced", received: 0, expected: 0 });
+      },
+      debounceMs: 20, reconcileEveryMs: 3_600_000, wakeCheckMs: 3_600_000, backupCheckMs: 50,
+    });
+    await svc.start();
+    cleanups.push(() => svc.stop());
+    return { svc, v, dest, backups, beats, sock: join(home, "b.sock") };
+  }
+
+  it("runs the scheduled backup by itself when one is due, once per cycle, and reports it", async () => {
+    let now = new Date(2026, 10, 9, 3, 0, 0);
+    const { svc, dest, backups, beats } = await withBackups(() => now);
+    await new Promise((r) => setTimeout(r, 400));
+    const destDir = join(dest, "ObsidianBridge/T");
+    expect(await listSnapshots(destDir)).toHaveLength(1);
+    expect(svc.status().backup.local).toMatchObject({ status: "ok", files: 2 });
+    expect(beats.some((b) => (b.details as Record<string, string>)?.backup_local === "ok")).toBe(true);
+    await new Promise((r) => setTimeout(r, 300));
+    expect(await listSnapshots(destDir)).toHaveLength(1); // same cycle: no second backup
+    now = new Date(2026, 10, 10, 2, 1, 0); // next night
+    await new Promise((r) => setTimeout(r, 400));
+    expect(await listSnapshots(destDir)).toHaveLength(2);
+    void backups;
+  });
+  it("backs up on request over the control socket and lists the restore points", async () => {
+    const { sock, dest } = await withBackups(() => new Date(2026, 10, 9, 3, 0, 0));
+    await new Promise((r) => setTimeout(r, 300));
+    const r = await callService<{ status: string }[]>(sock, "backup", { full: true }, 60_000);
+    expect(r!.ok).toBe(true);
+    expect(r!.data![0]).toMatchObject({ destination: "local", status: "ok", mode: "full" });
+    const l = await callService<{ destination: string; snapshots: { labels: string[] }[] }[]>(sock, "backup-list");
+    expect(l!.data![0].snapshots.length).toBe(2);
+    expect(l!.data![0].snapshots.some((x) => x.labels.includes("manual"))).toBe(true); // (the fake clock is frozen, so order by time is not meaningful here)
+    expect(await listSnapshots(join(dest, "ObsidianBridge/T"))).toHaveLength(2);
+  });
+  it("without a backup system, edits and deletes stay refused", async () => {
+    const { svc } = await service();
+    expect(svc.status().backup.configured).toBe(false);
+    await expect(svc.backupNow()).rejects.toThrow(/not set up/);
   });
 });

@@ -21,6 +21,8 @@ export type BridgeState = {
   results: Record<string, { status: "applied" | "conflict" | "failed"; message?: string; conflict?: Record<string, unknown> }>;
   /** owner pressed Pause on this Mac (the Menu Bar app or `obsidian-bridge pause`) */
   paused?: boolean;
+  /** last result per backup destination (the backups themselves are the source of truth) */
+  backup: { local?: BackupStatus; external?: BackupStatus };
   lastSyncAt?: string;
   lastSuccessAt?: string;
   lastError?: string | null;
@@ -28,9 +30,11 @@ export type BridgeState = {
   usage: Record<string, { requests: number; polls: number }>;
 };
 
+export type BackupStatus = { status: "ok" | "unavailable" | "failed"; at: string; message?: string; snapshotId?: string; lastSuccessAt?: string; files?: number; bytes?: number };
+
 export const EPOCH = "1970-01-01T00:00:00.000Z";
 
-export const emptyState = (): BridgeState => ({ version: 1, docs: {}, pdfs: {}, revoked: {}, grants: {}, exceptions: [], results: {}, cursors: { rev: EPOCH, exc: EPOCH }, usage: {} });
+export const emptyState = (): BridgeState => ({ version: 1, docs: {}, pdfs: {}, revoked: {}, grants: {}, exceptions: [], results: {}, backup: {}, cursors: { rev: EPOCH, exc: EPOCH }, usage: {} });
 
 export async function loadState(file: string): Promise<BridgeState> {
   try {

@@ -7,10 +7,11 @@ import { executeCommand, noBackupConfigured, type SafetyBackup } from "../approv
 import { saveConfig, type BridgeConfig } from "../config/config.js";
 import type { Logger } from "../logging.js";
 import type { PdfExtractor } from "../pdf/extract.js";
+import type { BackupManager, DestResult } from "../backup/manager.js";
 import type { CredentialStore } from "../security/keychain.js";
 import { findNoteById, setSyncFlag, syncVault, SyncNotConfirmedError, type SyncReport } from "../sync/engine.js";
 import { previewInitialSync } from "../sync/preview.js";
-import { countUsage, saveState, type BridgeState } from "../sync/state.js";
+import { countUsage, saveState, type BackupStatus, type BridgeState } from "../sync/state.js";
 
 export type ServiceOptions = {
   cfg: BridgeConfig;
@@ -22,8 +23,11 @@ export type ServiceOptions = {
   extractPdf: PdfExtractor;
   log: Logger;
   fetch?: FetchLike;
+  /** the backup system; without it, edits, moves and deletes stay refused */
+  backups?: BackupManager;
   safetyBackup?: SafetyBackup;
   /** test hooks */
+  backupCheckMs?: number;
   debounceMs?: number;
   reconcileEveryMs?: number;
   wakeCheckMs?: number;
@@ -46,6 +50,7 @@ export type ServiceStatus = {
   usageToday: { requests: number; polls: number };
   pollSeconds: number;
   backoffSeconds: number;
+  backup: { configured: boolean; local?: BackupStatus; external?: BackupStatus };
 };
 
 const DEFAULT_BACKOFF_MAX = 300;
@@ -72,6 +77,7 @@ export class BridgeService {
   private lastHeartbeat = 0;
   private lastBeatStatus = "";
   private syncRequestSeen = false;
+  private backupTimer: NodeJS.Timeout | null = null;
 
   constructor(private o: ServiceOptions) {}
 
@@ -115,8 +121,14 @@ export class BridgeService {
         this.fails = 0;
         this.schedulePoll(0);
         this.requestSync("wake");
+        void this.checkBackups();
       }
     }, this.o.wakeCheckMs ?? 5000);
+    // scheduled backups: check every minute whether a cycle is due (also catches up after sleep or a missed night)
+    if (this.o.backups) {
+      this.backupTimer = setInterval(() => void this.checkBackups(), this.o.backupCheckMs ?? 60_000);
+      void this.checkBackups();
+    }
     this.requestSync("startup");
     this.schedulePoll(0);
     this.log.info("bridge started");
@@ -124,7 +136,8 @@ export class BridgeService {
 
   async stop() {
     this.stopped = true;
-    for (const t of [this.pollTimer, this.debounce, this.reconcileTimer, this.wakeTimer]) if (t) clearTimeout(t);
+    for (const t of [this.pollTimer, this.debounce, this.reconcileTimer, this.wakeTimer, this.backupTimer]) if (t) clearTimeout(t);
+    clearInterval(this.backupTimer ?? undefined);
     clearInterval(this.reconcileTimer ?? undefined);
     clearInterval(this.wakeTimer ?? undefined);
     this.watcher?.close();
@@ -250,7 +263,7 @@ export class BridgeService {
         if (e instanceof ApiError && e.status === 409) continue; // taken, expired or gone
         throw e;
       }
-      const result = await executeCommand(claimed, { cfg: this.cfg, log: this.log, safetyBackup: this.o.safetyBackup ?? noBackupConfigured });
+      const result = await executeCommand(claimed, { cfg: this.cfg, log: this.log, safetyBackup: this.safetyBackup() });
       this.state.results[c.id] = result;
       await this.save(); // remember the outcome before telling LifeOS, so a crash can never re-run it
       try {
@@ -263,6 +276,54 @@ export class BridgeService {
       this.log.info("command finished", { op: claimed.op, status: result.status });
       if (result.status === "applied") this.requestSync("command");
     }
+  }
+
+  /* -------------------------------- backups -------------------------------- */
+
+  /** Used by approved changes: the primary local backup must succeed first, or nothing is changed. */
+  private safetyBackup(): SafetyBackup {
+    if (this.o.safetyBackup) return this.o.safetyBackup;
+    const b = this.o.backups;
+    return b
+      ? async (reason) => {
+          const r = await b.safetyBackup(reason);
+          this.record([{ destination: "local", status: r.ok ? "ok" : "failed", message: r.message, snapshotId: r.snapshotId }], false);
+          return r;
+        }
+      : noBackupConfigured;
+  }
+
+  private record(results: DestResult[], save = true) {
+    const at = new Date().toISOString();
+    for (const r of results) {
+      const prev = this.state.backup[r.destination];
+      this.state.backup[r.destination] = { status: r.status, at, message: r.message, snapshotId: r.snapshotId, files: r.files, bytes: r.bytes, lastSuccessAt: r.status === "ok" ? at : prev?.lastSuccessAt };
+    }
+    if (save) void this.save();
+  }
+
+  /** Run a scheduled backup if a daily, weekly or monthly cycle has none yet. Quiet when nothing is due. */
+  async checkBackups(): Promise<DestResult[] | null> {
+    const b = this.o.backups;
+    if (!b || this.stopped) return null;
+    return this.exclusive(async () => {
+      const results = await b.runScheduled();
+      if (!results) return null;
+      this.record(results);
+      await this.heartbeat(true, undefined, undefined, false).catch(() => {});
+      return results;
+    });
+  }
+
+  async backupNow(opts: { full?: boolean } = {}): Promise<DestResult[]> {
+    const b = this.o.backups;
+    if (!b) throw new Error("Backups are not set up. Run: obsidian-bridge setup");
+    return this.exclusive(async () => {
+      const results = await b.backupNow(opts);
+      this.record(results);
+      await this.heartbeat(true, undefined, undefined, false).catch(() => {});
+      return results;
+    });
   }
 
   /* -------------------------------- syncing -------------------------------- */
@@ -347,7 +408,7 @@ export class BridgeService {
         error,
         success,
         sync_request_seen: this.syncRequestSeen || undefined,
-        details: { notes: Object.values(this.state.docs).filter((d) => d.status === "synced").length, blocked: Object.values(this.state.docs).filter((d) => d.status === "blocked_secret").length, pdfs: Object.values(this.state.pdfs).filter((p) => p.status === "synced").length, version: "0.1.0" },
+        details: { ...this.backupDetails(), notes: Object.values(this.state.docs).filter((d) => d.status === "synced").length, blocked: Object.values(this.state.docs).filter((d) => d.status === "blocked_secret").length, pdfs: Object.values(this.state.pdfs).filter((p) => p.status === "synced").length, version: "0.1.0" },
       });
       this.lastHeartbeat = Date.now();
       this.lastBeatStatus = key;
@@ -355,6 +416,17 @@ export class BridgeService {
     } catch (e) {
       if (e instanceof DeviceRevokedError) throw e;
     }
+  }
+
+  private backupDetails(): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const d of ["local", "external"] as const) {
+      const s = this.state.backup[d];
+      if (!s) continue;
+      out[`backup_${d}`] = s.status === "ok" ? "ok" : s.status === "unavailable" ? "unavailable" : "failed";
+      if (s.lastSuccessAt) out[`backup_${d}_at`] = s.lastSuccessAt;
+    }
+    return out;
   }
 
   /* --------------------------------- control -------------------------------- */
@@ -392,6 +464,7 @@ export class BridgeService {
       usageToday: this.state.usage[day] ?? { requests: 0, polls: 0 },
       pollSeconds: this.cfg.pollSeconds,
       backoffSeconds: this.fails ? Math.round(this.nextDelayMs() / 1000) : 0,
+      backup: { configured: !!this.o.backups, local: this.state.backup.local, external: this.state.backup.external },
     };
   }
 
@@ -435,6 +508,11 @@ export class BridgeService {
         case "resume":
           await this.setPaused(false);
           return { ok: true, data: this.status() };
+        case "backup":
+          return { ok: true, data: await this.backupNow({ full: args?.full === true }) };
+        case "backup-list":
+          if (!this.o.backups) throw new Error("Backups are not set up");
+          return { ok: true, data: (await this.o.backups.list()).map((d) => ({ ...d, snapshots: d.snapshots.map((s) => ({ id: s.id, createdAt: s.createdAt, labels: s.labels, mode: s.mode, files: s.fileCount, bytes: s.totalBytes })) })) };
         case "preview":
           return { ok: true, data: await previewInitialSync(this.cfg.vaultPath, { pdfMaxBytes: this.cfg.pdfMaxBytes }) };
         case "confirm-initial-sync":
