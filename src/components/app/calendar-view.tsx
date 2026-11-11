@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import { api, notifyChanged } from "@/lib/client/api";
@@ -78,7 +78,17 @@ export function CalendarView() {
     const saved = readSaved<View | null>("cal-view", null);
     return saved ?? (window.innerWidth < 768 ? "day" : "month");
   });
-  const [anchor, setAnchor] = useState(today);
+  // /app/calendar?date=YYYY-MM-DD&event=ID (from a note link) jumps to that day and opens the event
+  const link = useRef<{ date: string | null; event: string | null }>(
+    typeof window === "undefined"
+      ? { date: null, event: null }
+      : (() => {
+          const p = new URLSearchParams(window.location.search);
+          const d = p.get("date");
+          return { date: d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null, event: p.get("event") };
+        })(),
+  );
+  const [anchor, setAnchor] = useState(link.current.date ?? today);
   const [filter, setFilterState] = useState<CalendarFilter>(() =>
     typeof window === "undefined" ? { hidden: [], tasks: true, milestones: true } : readSaved("cal-filter", { hidden: [], tasks: true, milestones: true }),
   );
@@ -105,6 +115,14 @@ export function CalendarView() {
   const to = addDaysKey(days[days.length - 1], 1);
   const { data: allEvents, loading } = useData(() => api.events(from, to), [from, to]);
   const { data: items } = useData(() => api.calendarItems(from, addDaysKey(to, -1)), [from, to]);
+  useEffect(() => {
+    const want = link.current.event;
+    if (!want || !allEvents) return;
+    link.current = { date: null, event: null };
+    window.history.replaceState(null, "", window.location.pathname);
+    const e = allEvents.find((x) => x.id === want);
+    if (e) setDialog({ open: true, event: e });
+  }, [allEvents]);
   const events = useMemo(() => (allEvents ?? []).filter((e) => !filter.hidden.includes(e.color)), [allEvents, filter.hidden]);
   const usedColors = useMemo(() => new Set<EventColor>((allEvents ?? []).map((e) => e.color)), [allEvents]);
   const shownItems = useMemo(

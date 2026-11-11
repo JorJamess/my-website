@@ -45,6 +45,10 @@ describe("searchAll", () => {
     const t = await repo.searchAll({ q: "", tag: "exam" });
     expect(t.notes.length).toBe(1);
   });
+  it("finds a habit by its description too", async () => {
+    await repo.createHabit({ title: "Gym", description: "leg day and cardio", schedule_type: "daily" });
+    expect((await repo.searchAll({ q: "cardio" })).habits.map((h) => h.title)).toEqual(["Gym"]);
+  });
   it("returns nothing for an empty query without filters", async () => {
     await seed();
     const r = await repo.searchAll({ q: "  " });

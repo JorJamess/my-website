@@ -61,7 +61,7 @@ export async function searchAll(f: SearchAllFilters): Promise<SearchAllResult> {
     .slice(0, limit)
     .map((g) => ({ id: g.id, title: g.title, description: g.description, status: g.status, target_date: g.target_date }));
   const habitHits = habits
-    .filter((h) => h.title.toLowerCase().includes(needle))
+    .filter((h) => h.title.toLowerCase().includes(needle) || (h.description ?? "").toLowerCase().includes(needle))
     .filter((h) => (f.status === "open" ? !h.archived_at : f.status === "done" ? !!h.archived_at : true))
     .slice(0, limit)
     .map((h) => ({ id: h.id, title: h.title, archived: !!h.archived_at }));

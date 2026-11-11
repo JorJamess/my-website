@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { api, notifyChanged } from "@/lib/client/api";
@@ -37,6 +37,19 @@ export function HabitsView() {
   const { data, loading, error } = useData(() => api.habits(), []);
   const [dialog, setDialog] = useState<{ open: boolean; habit: HabitOverview | null }>({ open: false, habit: null });
   const today = localDateKey();
+
+  // /app/habits?id=… (from a search result) opens that habit once
+  const deepLinked = useRef(false);
+  useEffect(() => {
+    if (deepLinked.current || !data) return;
+    deepLinked.current = true;
+    const id = new URLSearchParams(window.location.search).get("id");
+    if (!id) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    const habit = data.find((h) => h.id === id);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (habit) setDialog({ open: true, habit });
+  }, [data]);
 
   const scheduledToday = data?.filter((h) => h.stats.scheduled_today) ?? [];
   const doneToday = scheduledToday.filter((h) => h.stats.done_today).length;

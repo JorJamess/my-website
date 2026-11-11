@@ -10,7 +10,7 @@ import { api, notifyChanged } from "@/lib/client/api";
 import { useData } from "@/lib/client/use-data";
 import { normalizeTag, normalizeTags } from "@/lib/notes";
 import { toggleTaskLine } from "@/lib/markdown";
-import { formatDay, localDateKey } from "@/lib/time";
+import { formatDay, localDateKey, splitLocal } from "@/lib/time";
 import type { Note, NoteDetail } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -546,10 +546,10 @@ function NoteEditor({ note, folderNames, onCreated, onClose }: { note: Note | nu
           <LinkChip key={g.id} href={`/app/goals/${g.id}`} icon={<Target className="size-3" />} label={g.title} onRemove={() => unlink("goal", g.id)} />
         ))}
         {detail?.links.tasks.map((t) => (
-          <LinkChip key={t.id} href="/app/todos" icon={<ListChecks className="size-3" />} label={t.title} done={t.done} onRemove={() => unlink("task", t.id)} />
+          <LinkChip key={t.id} href={`/app/todos?id=${t.id}`} icon={<ListChecks className="size-3" />} label={t.title} done={t.done} onRemove={() => unlink("task", t.id)} />
         ))}
         {detail?.links.events.map((ev) => (
-          <LinkChip key={ev.id} href="/app/calendar" icon={<CalendarDays className="size-3" />} label={ev.title} onRemove={() => unlink("event", ev.id)} />
+          <LinkChip key={ev.id} href={`/app/calendar?date=${splitLocal(ev.start_at).date}&event=${ev.id}`} icon={<CalendarDays className="size-3" />} label={ev.title} onRemove={() => unlink("event", ev.id)} />
         ))}
         {!hasLinks && <span className="text-muted-foreground">nothing yet</span>}
         <Button

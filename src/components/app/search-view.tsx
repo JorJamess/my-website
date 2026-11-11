@@ -199,7 +199,7 @@ export function SearchView() {
               <section aria-label="Tasks">
                 <h2 className="mb-1 text-xs text-muted-foreground">Tasks</h2>
                 {res.tasks.map((t) => (
-                  <Link key={t.id} href="/app/todos" className={row}>
+                  <Link key={t.id} href={`/app/todos?id=${t.id}`} className={row}>
                     <ListChecks className="mt-0.5 size-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />
                     <span className={cn("min-w-0 flex-1 truncate text-[15px]", t.done && "text-muted-foreground line-through")}><Highlight text={t.title} q={debounced} /></span>
                     <span className="shrink-0 text-xs text-muted-foreground">{t.done ? "Done" : t.due_date ? `Due ${formatDay(t.due_date, { day: "numeric", month: "short" })}` : ""}</span>
@@ -235,7 +235,7 @@ export function SearchView() {
               <section aria-label="Habits">
                 <h2 className="mb-1 text-xs text-muted-foreground">Habits</h2>
                 {res.habits.map((h) => (
-                  <Link key={h.id} href="/app/habits" className={row}>
+                  <Link key={h.id} href={`/app/habits?id=${h.id}`} className={row}>
                     <Sprout className="mt-0.5 size-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />
                     <span className="min-w-0 flex-1 truncate text-[15px]"><Highlight text={h.title} q={debounced} /></span>
                     <span className="shrink-0 text-xs text-muted-foreground">{h.archived ? "Archived" : ""}</span>

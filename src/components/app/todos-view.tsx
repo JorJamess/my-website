@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Columns3, List, Plus } from "lucide-react";
 import { api, notifyChanged } from "@/lib/client/api";
@@ -61,6 +61,18 @@ export function TodosView() {
 
   const todos = data?.todos;
   const categories = data?.categories ?? [];
+
+  // /app/todos?id=… (from a note link or a search result) opens that task once
+  const deepLinked = useRef(false);
+  useEffect(() => {
+    if (deepLinked.current || !todos) return;
+    deepLinked.current = true;
+    const id = new URLSearchParams(window.location.search).get("id");
+    if (!id) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (todos.some((t) => t.id === id)) setDialog({ open: true, id });
+  }, [todos]);
 
   const { tops, boardTops, subsOf, counts } = useMemo(() => {
     const all = todos ?? [];

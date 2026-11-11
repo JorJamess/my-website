@@ -17,7 +17,7 @@ export const GET = api(async (req) => {
     events,
     notes,
     todos,
-    habits: habits.filter((h) => h.title.toLowerCase().includes(needle)).slice(0, 8).map((h) => ({ id: h.id, title: h.title, archived: !!h.archived_at })),
+    habits: habits.filter((h) => h.title.toLowerCase().includes(needle) || (h.description ?? "").toLowerCase().includes(needle)).slice(0, 8).map((h) => ({ id: h.id, title: h.title, archived: !!h.archived_at })),
     goals: goals.filter((g) => g.title.toLowerCase().includes(needle)).slice(0, 8).map((g) => ({ id: g.id, title: g.title, status: g.status })),
   });
 });

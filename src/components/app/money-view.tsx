@@ -22,6 +22,7 @@ export function MoneyView() {
 
   const rows = data ? budgetRows(data) : [];
   const alert = budgetAlert(rows, formatBaht);
+  const unbudgeted = (data?.byCategory ?? []).filter((c) => c.type === "expense" && !(c.monthlyBudget && c.monthlyBudget > 0) && c.amount > 0).sort((a, b) => b.amount - a.amount);
   const bills = (cal?.recurring ?? [])
     .filter((r) => r.type === "expense")
     .flatMap((r) => r.dueDates.map((d) => ({ id: `${r.id}:${d}`, name: r.name, date: d, amount: r.amount })))
@@ -87,6 +88,18 @@ export function MoneyView() {
               </ul>
             )}
           </section>
+
+          {unbudgeted.length > 0 && (
+            <section aria-label="Spending without a budget">
+              <h2 className="mb-1 text-xs text-muted-foreground">Spending without a budget</h2>
+              {unbudgeted.map((c) => (
+                <div key={c.id} className="flex items-baseline gap-2 border-t py-2.5 text-[14.5px]">
+                  <span>{c.name}</span>
+                  <span className="ml-auto text-[13px] tabular-nums text-muted-foreground">{formatBaht(c.amount)}</span>
+                </div>
+              ))}
+            </section>
+          )}
 
           <section aria-label="Bills coming up">
             <h2 className="mb-1 text-xs text-muted-foreground">Bills coming up</h2>

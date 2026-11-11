@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import { api } from "@/lib/client/api";
 import { useData } from "@/lib/client/use-data";
 import { formatBaht, MONEY_APP_URL } from "@/lib/money-types";
+import { budgetRows } from "@/lib/money-view";
 import { cn } from "@/lib/utils";
 import { Pupu } from "./pupu";
 
@@ -13,6 +15,7 @@ export function MoneyCard() {
   const expenses = (data?.byCategory ?? []).filter((c) => c.type === "expense" && c.amount > 0);
   const total = expenses.reduce((s, c) => s + c.amount, 0) || 1;
   const shown = expenses.slice(0, 5);
+  const state = new Map(budgetRows({ byCategory: data?.byCategory ?? [] }).map((r) => [r.id, r.state]));
 
   return (
     <div className="group/pupu relative rounded-[14px] border bg-card px-5 py-4">
@@ -42,18 +45,22 @@ export function MoneyCard() {
               </div>
               <ul className="mt-2.5 flex flex-wrap gap-x-3.5 gap-y-1 text-[12.5px] text-muted-foreground">
                 {shown.map((c) => {
-                  const over = c.monthlyBudget != null && c.amount > c.monthlyBudget;
+                  const st = state.get(c.id);
                   return (
-                    <li key={c.id} title={`${c.name} ${formatBaht(c.amount)}`} className={cn(over && "text-destructive")}>
+                    <li key={c.id} title={`${c.name} ${formatBaht(c.amount)}`} className={cn(st === "over" && "text-destructive", st === "near" && "text-amber-600 dark:text-amber-400")}>
                       <span className="mr-1.5 inline-block size-[7px] rounded-full" style={{ background: c.color }} />
                       {c.name}
-                      {over && " over budget"}
+                      {st === "over" && " over budget"}
+                      {st === "near" && " near budget"}
                     </li>
                   );
                 })}
               </ul>
             </>
           )}
+          <Link href="/app/money" className="mt-3 mr-4 inline-flex items-center gap-1 text-[12.5px] text-muted-foreground underline-offset-4 hover:text-brand hover:underline">
+            See budgets and bills
+          </Link>
           <a
             href={MONEY_APP_URL}
             target="_blank"
