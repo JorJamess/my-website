@@ -1,6 +1,6 @@
 # ADR 0002: Obsidian Bridge
 
-Date: 2026-11-11. Status: **proposed** (waiting for owner approval of Phase 1).
+Date: 2026-11-11. Status: **accepted** (owner approved 2026-11-11) and implemented. The practical guide is `docs/obsidian-integration.md`; this file keeps the reasons.
 
 ## Context
 Obsidian ("James Knowledge") stays the source of truth for personal knowledge. Claude on claude.ai and mobile should be able to search and read notes the owner chose to share, and propose changes, even while the Mac is off. Every remote change needs the owner's approval. Constraints: existing Cloudflare Workers + D1 + KV only, no new paid service, no deploy or production change without the owner.
@@ -80,3 +80,12 @@ Phase 2 (D1 + Worker API + MCP, local only) → Phase 3 (Node core + CLI) → Ph
 1. Before the feature is usable in production the owner must: back up in LifeOS, run `npm run db:migrate:remote`, set the `OBSIDIAN_PAYLOAD_KEY` secret, then push.
 2. Existing traffic must be read from the Cloudflare dashboard to confirm headroom for 5,760 polls/day.
 3. Xcode is not installed; see findings.
+
+## As built: where the implementation differs from the plan above
+- **Bridge ↔ Worker contract:** the poll returns a `cursor` that lags by one minute (a revocation committed just after a read must not be skipped), the count of proposals awaiting approval, and revocation/re-enable/exception changes. Revoked devices get `device_revoked` and are not counted toward the per-IP lockout; valid tokens are never locked out.
+- **Upload safety:** every write is guarded in SQL against a concurrent revoke and re-checked after each batch; multi-part uploads stay invisible until complete and an interrupted re-upload keeps the previous copy searchable.
+- **Secret fingerprints** no longer include line numbers, so the Mac's scan of a whole note and the Worker's scan of uploaded chunks agree. The scanner, path rules, chunk sizes, crypto helpers and line diff are shared code: `src/lib/obsidian/*` is the source, copied to the Bridge by `npm run sync-shared`, with tests that fail on drift.
+- **Backups** use per-snapshot folders with hard links for unchanged files in daily backups (weekly, monthly and the first are full copies) rather than a separate content-addressed store. Same goal: every restore point is complete on its own.
+- **The Menu Bar app** holds no logic. Wizard steps are `obsidian-bridge wizard <step>` (JSON). The Core, not the Swift app, writes the Keychain entry.
+- **Claude can only target synced notes and folders that contain a synced note**; other paths look nonexistent.
+- **Not done:** showing the count of local-only files in a folder before approving its deletion (only the Mac knows it; it would need an extra Bridge round trip), Bridge tests in CI, and any check on real devices (Claude mobile, external SSD, Keychain/LaunchAgent on the owner's Mac).
