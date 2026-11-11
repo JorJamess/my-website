@@ -1,8 +1,9 @@
 import "server-only";
 import type { CalendarEvent, EventColor } from "@/lib/types";
 import type { EventCreateInput, EventUpdateInput } from "@/lib/schemas";
-import { localDateKey, weekdayIndex } from "@/lib/time";
+import { localDateKey, parseLocal, weekdayIndex } from "@/lib/time";
 import { expandSeries, parseRepeatDays, serializeRepeatDays } from "@/lib/recurrence";
+import { DEFAULT_EVENT_MINUTES, eventInterval, freeSlots, overlaps } from "@/lib/scheduling";
 import { ctx, InputError, parseOrThrow, resolveTimes } from "../core";
 
 export type EventRow = Omit<CalendarEvent, "all_day" | "done" | "color" | "repeat_days"> & {
@@ -234,4 +235,41 @@ export async function detachOccurrence(id: string, day: string, input: EventCrea
   const created = await createEvent({ ...input, repeat_days: undefined, repeat_until: undefined });
   await skipOccurrence(id, day);
   return created;
+}
+
+/* --------------------- Clashes and free time --------------------- */
+
+/** Timed events that overlap the given time. A timed event with no end counts as an hour. All-day events never clash. */
+export async function findConflicts(start: string, end?: string | null, opts: { excludeId?: string } = {}): Promise<CalendarEvent[]> {
+  const { db, tz } = await ctx();
+  const s = parseOrThrow(start, tz, "start").getTime();
+  const e = end ? parseOrThrow(end, tz, "end").getTime() : s + DEFAULT_EVENT_MINUTES * 60_000;
+  if (e < s) throw new InputError("End time can't be before the start time");
+  const probe = { start: s, end: Math.max(e, s + 1) };
+  const near = await fetchEvents(db, tz, new Date(probe.start).toISOString(), new Date(probe.end).toISOString());
+  return near.filter((ev) => {
+    if (opts.excludeId && ev.id === opts.excludeId) return false;
+    const iv = eventInterval(ev);
+    return !!iv && overlaps(iv, probe);
+  });
+}
+
+/** Free gaps of at least `minutes` on a day, inside a daily window (default 08:00 to 22:00 local time). */
+export async function findFreeSlots(opts: { date: string; minutes: number; from?: string; to?: string }): Promise<{ start_at: string; end_at: string; minutes: number }[]> {
+  const { db, tz } = await ctx();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(opts.date)) throw new InputError("date must be YYYY-MM-DD");
+  const hhmm = /^([01]\d|2[0-3]):[0-5]\d$/;
+  const from = opts.from ?? "08:00";
+  const to = opts.to ?? "22:00";
+  if (!hhmm.test(from) || !hhmm.test(to)) throw new InputError("from and to must be HH:MM");
+  const winStart = parseLocal(`${opts.date} ${from}`, tz).getTime();
+  const winEnd = parseLocal(`${opts.date} ${to}`, tz).getTime();
+  if (winEnd <= winStart) throw new InputError("The window must end after it starts");
+  const near = await fetchEvents(db, tz, new Date(winStart).toISOString(), new Date(winEnd).toISOString());
+  const busy = near.map(eventInterval).filter((i): i is NonNullable<typeof i> => !!i);
+  return freeSlots(busy, winStart, winEnd, Math.max(1, opts.minutes)).map((g) => ({
+    start_at: new Date(g.start).toISOString(),
+    end_at: new Date(g.end).toISOString(),
+    minutes: Math.round((g.end - g.start) / 60_000),
+  }));
 }

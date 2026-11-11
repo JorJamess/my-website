@@ -255,18 +255,96 @@ export const tools: ToolDef[] = [
     },
   }),
   define({
+    name: "check_event_conflicts",
+    title: "ตรวจนัดชนกัน",
+    description:
+      "ตรวจว่าช่วงเวลาที่จะลงงานชนกับงานอื่นในปฏิทินหรือไม่ (รวมงานซ้ำรายสัปดาห์; งานทั้งวันไม่นับ; งานที่ไม่มีเวลาจบนับเป็น 1 ชั่วโมง). ควรเรียกก่อน create_event / update_event ทุกครั้ง. ถ้าจะแก้งานเดิม ให้ใส่ exclude_id เป็น id ของงานนั้นเพื่อไม่ให้ชนกับตัวเอง. งานชนกันแค่ติดกัน (11:00 จบ / 11:00 เริ่ม) ไม่ถือว่าชน",
+    schema: z.object({
+      start: z.string().describe("เวลาเริ่ม เช่น 2026-11-13 10:00 (ไม่มี offset = เวลาไทย)"),
+      end: z.string().optional().describe("เวลาจบ (ไม่ใส่ = 1 ชั่วโมงหลังเริ่ม)"),
+      exclude_id: z.string().optional().describe("id ของงานที่กำลังแก้ ไม่ให้นับเป็นตัวชน"),
+    }),
+    annotations: { readOnlyHint: true },
+    run: async ({ start, end, exclude_id }, tz) => {
+      const c = await repo.findConflicts(start, end, { excludeId: exclude_id });
+      return { has_conflicts: c.length > 0, count: c.length, conflicts: c.map((e) => fmtEvent(e, tz)) };
+    },
+  }),
+  define({
+    name: "find_free_slots",
+    title: "หาช่วงเวลาว่าง",
+    description:
+      "หาช่วงว่างในวันหนึ่งที่ยาวอย่างน้อย N นาที โดยดูจากงานในปฏิทิน (รวมงานซ้ำ; งานทั้งวันไม่นับว่าไม่ว่าง). ค่าเริ่มต้นดูช่วง 08:00–22:00 เวลาไทย. ช่วงว่างที่ได้เป็นแค่ 'เวลาที่ไม่มีนัด' ไม่ใช่นัดจริง เวลาเสนอแผนให้บอกผู้ใช้ชัดเจนว่าเป็นข้อเสนอ",
+    schema: z.object({
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("วันที่ YYYY-MM-DD"),
+      minutes: z.number().int().min(5).max(720).describe("ต้องการช่วงว่างอย่างน้อยกี่นาที"),
+      from: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional().describe("เริ่มดูตั้งแต่ HH:MM (ค่าเริ่มต้น 08:00)"),
+      to: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional().describe("ดูถึง HH:MM (ค่าเริ่มต้น 22:00)"),
+    }),
+    annotations: { readOnlyHint: true },
+    run: async ({ date, minutes, from, to }, tz) => {
+      const slots = await repo.findFreeSlots({ date, minutes, from, to });
+      return {
+        date,
+        window: `${from ?? "08:00"}-${to ?? "22:00"}`,
+        count: slots.length,
+        slots: slots.map((g) => ({ start: formatLocal(g.start_at, tz), end: formatLocal(g.end_at, tz), minutes: g.minutes })),
+      };
+    },
+  }),
+  define({
+    name: "search_notes",
+    title: "ค้นโน้ตแบบจัดอันดับ",
+    description:
+      "ค้นโน้ตตามคำ (หลายคำได้ ใช้ได้ทั้งไทยและอังกฤษ) เรียงตามความตรง: คำในหัวข้อและแท็กได้คะแนนมากกว่าในเนื้อหา โน้ตที่มีครบทุกคำได้โบนัส พร้อมข้อความตัวอย่างรอบคำที่เจอ ใช้ตอบเช่น 'หาโน้ตเรื่อง Python' แล้วใช้ get_note เพื่ออ่านฉบับเต็มก่อนสรุป อย่าเดาเนื้อหาจากตัวอย่าง",
+    schema: z.object({
+      query: z.string().min(1).describe("คำค้น เช่น 'database normalization'"),
+      folder: z.string().optional().describe("ชื่อโฟลเดอร์ (หรือ none)"),
+      tag: z.string().optional(),
+      limit: z.number().int().min(1).max(50).optional().describe("ค่าเริ่มต้น 10"),
+    }),
+    annotations: { readOnlyHint: true },
+    run: async ({ query, folder, tag, limit }) => {
+      const hits = await repo.searchNotesRanked(query, { folder, tag, limit });
+      return {
+        count: hits.length,
+        notes: hits.map((h) => ({ id: h.note.id, title: h.note.title, folder: h.note.folder?.name ?? null, tags: h.note.tags, score: h.score, snippet: h.snippet, updated_at: h.note.updated_at })),
+      };
+    },
+  }),
+  define({
+    name: "get_stale_goals",
+    title: "เป้าหมายที่ไม่ขยับ",
+    description:
+      "เป้าหมายที่กำลังทำ (active) แต่ไม่มีความคืบหน้ามานานอย่างน้อย N วัน (ค่าเริ่มต้น 14) เรียงจากเงียบที่สุด. 'ความคืบหน้า' = ติ๊ก milestone, ทำ task ที่ผูกเสร็จ หรือเช็กอิน habit ที่ผูก; เป้าหมายที่ยังไม่เคยมีนับจากวันที่สร้าง. ใช้ตอบ 'เป้าหมายไหนค้างอยู่' แล้วเสนอขั้นถัดไปจากข้อมูลจริง",
+    schema: z.object({ days: z.number().int().min(1).max(365).optional().describe("เงียบมาอย่างน้อยกี่วัน (ค่าเริ่มต้น 14)") }),
+    annotations: { readOnlyHint: true },
+    run: async ({ days }) => {
+      const list = await repo.getStaleGoals(days ?? 14);
+      return { threshold_days: days ?? 14, count: list.length, goals: list };
+    },
+  }),
+  define({
     name: "create_event",
     title: "ลงงานใหม่",
     description:
-      "เพิ่มงาน/นัดหมายลงปฏิทิน. เวลาที่ไม่มี offset ถือเป็นเวลาท้องถิ่น (ไทย +07:00). งานทั้งวันให้ใส่ all_day=true และ start เป็น YYYY-MM-DD. งานที่ซ้ำทุกสัปดาห์ (เช่น ยิมทุกจันทร์/พุธ/ศุกร์) ให้ใส่ repeat_days=[1,3,5] โดย start คือครั้งแรก. สิ่งที่ไม่มีเวลาแน่นอนให้ใช้ create_todo แทน",
+      "เพิ่มงาน/นัดหมายลงปฏิทิน. เวลาที่ไม่มี offset ถือเป็นเวลาท้องถิ่น (ไทย +07:00). งานทั้งวันให้ใส่ all_day=true และ start เป็น YYYY-MM-DD. งานที่ซ้ำทุกสัปดาห์ (เช่น ยิมทุกจันทร์/พุธ/ศุกร์) ให้ใส่ repeat_days=[1,3,5] โดย start คือครั้งแรก. สิ่งที่ไม่มีเวลาแน่นอนให้ใช้ create_todo แทน. ก่อนลงงานที่มีเวลา ให้เรียก check_event_conflicts ก่อน แล้วถามเจ้าของถ้าชน",
     schema: eventCreateSchema,
-    run: async (args, tz) => ({ created: fmtEvent(await repo.createEvent(args), tz) }),
+    run: async (args, tz) => {
+      const created = await repo.createEvent(args);
+      // not blocked: the owner may want both. Claude is told so it can mention it.
+      const clashes = args.all_day ? [] : await repo.findConflicts(created.start_at, created.end_at, { excludeId: created.id });
+      return {
+        created: fmtEvent(created, tz),
+        ...(clashes.length ? { warning: "งานนี้ชนกับงานอื่น บอกเจ้าของและถามว่าจะย้ายไหม", conflicts: clashes.map((e) => fmtEvent(e, tz)) } : {}),
+      };
+    },
   }),
   define({
     name: "update_event",
     title: "แก้ไขงาน",
     description:
-      "แก้ไขงานตาม id (ส่งเฉพาะฟิลด์ที่ต้องการเปลี่ยน; งานที่ทำซ้ำจะแก้ทั้งชุด). ถ้าเปลี่ยน start โดยไม่ส่ง end ระยะเวลาเดิมจะถูกคงไว้. ใช้ done=true เพื่อทำเครื่องหมายว่าเสร็จ",
+      "แก้ไขงานตาม id (ส่งเฉพาะฟิลด์ที่ต้องการเปลี่ยน; งานที่ทำซ้ำจะแก้ทั้งชุด). ถ้าเปลี่ยน start โดยไม่ส่ง end ระยะเวลาเดิมจะถูกคงไว้. ใช้ done=true เพื่อทำเครื่องหมายว่าเสร็จ. ก่อนเปลี่ยนเวลา ให้เรียก check_event_conflicts (ใส่ exclude_id) เพื่อดูว่าชนไหม; การแก้ไขจะรอเจ้าของอนุมัติ",
     schema: eventUpdateSchema.extend({ id }),
     annotations: { idempotentHint: true },
     run: async ({ id, ...rest }, tz) => {

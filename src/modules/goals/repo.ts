@@ -330,3 +330,64 @@ export async function getGoalsBrief(limit = 3): Promise<GoalBrief[]> {
     overdue: g.overdue,
   }));
 }
+
+export type StaleGoal = {
+  id: string;
+  title: string;
+  days_since_progress: number;
+  last_progress: string | null; // YYYY-MM-DD of the latest milestone done, linked task done or linked habit check-in
+  progress_percent: number | null;
+  target_date: string | null;
+  days_left: number | null;
+  open_linked_tasks: number;
+};
+
+/**
+ * Active goals with no recorded progress for at least `days` days, longest quiet first.
+ * "Progress" = a milestone ticked, a linked task finished, or a check-in on a linked habit.
+ * A goal that never had any is measured from when it was created.
+ */
+export async function getStaleGoals(days = 14): Promise<StaleGoal[]> {
+  const { db } = await ctx();
+  const today = localDateKey();
+  const goals = (await listGoals({ status: "active" }));
+  if (!goals.length) return [];
+  const [m, t, h] = await Promise.all([
+    db.prepare("SELECT goal_id, MAX(done_at) AS at FROM milestones WHERE done_at IS NOT NULL GROUP BY goal_id").all<{ goal_id: string; at: string }>(),
+    db
+      .prepare("SELECT gl.goal_id AS goal_id, MAX(t.done_at) AS at FROM goal_links gl JOIN todos t ON t.id = gl.entity_id WHERE gl.entity_type = 'task' AND t.done_at IS NOT NULL GROUP BY gl.goal_id")
+      .all<{ goal_id: string; at: string }>(),
+    db
+      .prepare("SELECT gl.goal_id AS goal_id, MAX(c.day) AS at FROM goal_links gl JOIN habit_checkins c ON c.habit_id = gl.entity_id WHERE gl.entity_type = 'habit' GROUP BY gl.goal_id")
+      .all<{ goal_id: string; at: string }>(),
+  ]);
+  const last = new Map<string, string>();
+  const note = (rows: { goal_id: string; at: string }[], isDay = false) => {
+    for (const r of rows) {
+      const d = isDay ? r.at : localDateKey(new Date(r.at));
+      if (d > (last.get(r.goal_id) ?? "")) last.set(r.goal_id, d);
+    }
+  };
+  note(m.results);
+  note(t.results);
+  note(h.results, true);
+  const dayMs = 86_400_000;
+  const between = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / dayMs);
+  return goals
+    .map((g) => {
+      const lp = last.get(g.id) ?? null;
+      const since = between(lp ?? localDateKey(new Date(g.created_at)), today);
+      return {
+        id: g.id,
+        title: g.title,
+        days_since_progress: since,
+        last_progress: lp,
+        progress_percent: g.progress.percent === null ? null : Math.round(g.progress.percent * 100),
+        target_date: g.target_date,
+        days_left: g.days_left,
+        open_linked_tasks: g.progress.tasks.total - g.progress.tasks.done,
+      };
+    })
+    .filter((g) => g.days_since_progress >= days)
+    .sort((a, b) => b.days_since_progress - a.days_since_progress);
+}

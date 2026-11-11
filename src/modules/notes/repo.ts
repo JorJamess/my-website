@@ -2,6 +2,7 @@ import "server-only";
 import type { EventColor, Note, NoteDetail, NoteFolder } from "@/lib/types";
 import type { NoteCreateInput, NoteLinkInput, NoteUpdateInput } from "@/lib/schemas";
 import { normalizeTag, normalizeTags } from "@/lib/notes";
+import { queryTerms, rankNotes, snippetAround } from "@/lib/notes-rank";
 import { ctx, InputError } from "../core";
 import { getEvent } from "../events/repo";
 import { categoryIdFor } from "../tasks/repo";
@@ -261,4 +262,38 @@ export async function unlinkNote(noteId: string, input: NoteLinkInput): Promise<
       : await db.prepare("DELETE FROM note_links WHERE note_id = ? AND entity_type = ? AND entity_id = ?").bind(noteId, input.entity_type, input.entity_id).run();
   if (input.entity_type === "event") await syncEventColumn(noteId);
   return (r.meta.changes ?? 0) > 0;
+}
+
+/* ------------------------- Ranked search ------------------------- */
+
+export type NoteHit = { note: Note; score: number; snippet: string };
+
+/**
+ * Search notes word by word (any word can match; notes with more of the words rank higher), best first.
+ * Plain substring matching, so Thai works too. Optional folder / tag narrow it down.
+ */
+export async function searchNotesRanked(q: string, opts: { folder?: string; tag?: string; limit?: number } = {}): Promise<NoteHit[]> {
+  const { db } = await ctx();
+  const terms = queryTerms(q);
+  if (!terms.length) return [];
+  const where: string[] = [];
+  const binds: unknown[] = [];
+  const bind = (v: unknown) => `?${binds.push(v)}`;
+  const any = terms.map((t) => {
+    const like = bind(`%${t}%`);
+    return `(n.title LIKE ${like} OR n.content LIKE ${like} OR EXISTS (SELECT 1 FROM note_tags g WHERE g.note_id = n.id AND g.tag LIKE ${like}))`;
+  });
+  where.push(`(${any.join(" OR ")})`);
+  if (opts.folder === "none") where.push("n.folder_id IS NULL");
+  else if (opts.folder) where.push(`c.name = ${bind(opts.folder)} COLLATE NOCASE`);
+  if (opts.tag) where.push(`EXISTS (SELECT 1 FROM note_tags g2 WHERE g2.note_id = n.id AND g2.tag = ${bind(normalizeTag(opts.tag))})`);
+  const [{ results }, tags] = await Promise.all([
+    db.prepare(`${SELECT} WHERE ${where.join(" AND ")} LIMIT 300`).bind(...binds).all<NoteRow>(),
+    tagsByNote(),
+  ]);
+  const notes = results.map((r) => toNote(r, tags.get(r.id) ?? []));
+  const limit = Math.min(Math.max(opts.limit ?? 10, 1), 50);
+  return rankNotes(notes, terms)
+    .slice(0, limit)
+    .map((r) => ({ note: r.note, score: r.score, snippet: snippetAround(r.note.content, terms) }));
 }
