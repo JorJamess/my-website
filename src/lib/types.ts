@@ -187,7 +187,7 @@ export type SearchAllResult = {
   habits: { id: string; title: string; archived: boolean }[];
 };
 
-export type ActionRisk = "delete" | "edit" | "link";
+export type ActionRisk = "delete" | "edit" | "link" | "vault";
 export type PendingStatus = "pending" | "approved" | "rejected" | "failed" | "expired";
 export type PendingAction = {
   id: string;

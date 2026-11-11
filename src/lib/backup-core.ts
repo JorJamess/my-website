@@ -4,7 +4,16 @@
  * Tables that are backed up and restored, in dependency order (parents first).
  * To include a new table in backups and restores, add it here; nothing else needs to change.
  */
-export const BACKUP_TABLES = ["events", "event_exceptions", "notes", "note_tags", "note_links", "categories", "todos", "habits", "habit_checkins", "goals", "milestones", "goal_links"] as const;
+export const BACKUP_TABLES = ["events", "event_exceptions", "notes", "note_tags", "note_links", "categories", "todos", "habits", "habit_checkins", "goals", "milestones", "goal_links", "obsidian_revocations"] as const;
+/**
+ * Control data that must never be rolled back by a restore: its rows are merged, not replaced, and a row only
+ * changes when the backup's version is higher. Revocation tombstones live here, so an older backup can't bring a
+ * revoked note back. (Note text, chunks, PDF text, search indexes and approval payloads are deliberately NOT backed up.)
+ */
+export const MERGE_TABLES: Partial<Record<BackupTable, { key: string; version: string }>> = {
+  obsidian_revocations: { key: "document_id", version: "grant_version" },
+};
+
 export type BackupTable = (typeof BACKUP_TABLES)[number];
 
 export const BACKUP_PREFIX = "backup:";
@@ -120,9 +129,13 @@ export async function restoreSnapshot(db: D1Database, snap: BackupSnapshot) {
     const unknown = cols.filter((c) => !live.has(c));
     if (unknown.length) throw new RestoreError(`The backup has columns this version doesn't know (${t}: ${unknown.join(", ")})`);
     if (!rows.length) continue;
+    const merge = MERGE_TABLES[t];
+    const upsert = merge
+      ? ` WHERE true ON CONFLICT("${merge.key}") DO UPDATE SET ${cols.filter((c) => c !== merge.key).map((c) => `"${c}" = excluded."${c}"`).join(", ")} WHERE excluded."${merge.version}" > "${t}"."${merge.version}"`
+      : "";
     const sql = `INSERT INTO ${t} (${cols.map((c) => `"${c}"`).join(", ")}) SELECT ${cols
       .map((c) => `json_extract(value, '$."${c}"')`)
-      .join(", ")} FROM json_each(?1)`;
+      .join(", ")} FROM json_each(?1)${upsert}`;
     let chunk: Row[] = [];
     let size = 0;
     for (const row of rows) {
@@ -139,7 +152,7 @@ export async function restoreSnapshot(db: D1Database, snap: BackupSnapshot) {
   }
 
   // children first when deleting, parents first when inserting
-  const deletes = [...present].reverse().map((t) => db.prepare(`DELETE FROM ${t}`));
+  const deletes = [...present].filter((t) => !MERGE_TABLES[t]).reverse().map((t) => db.prepare(`DELETE FROM ${t}`));
   await db.batch([...deletes, ...inserts]);
   return countRows(snap);
 }

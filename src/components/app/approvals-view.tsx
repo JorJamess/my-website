@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Pupu } from "./pupu";
 
-const ICON: Record<ActionRisk, typeof Trash2> = { delete: Trash2, edit: ListChecks, link: ListChecks };
+const ICON: Record<ActionRisk, typeof Trash2> = { delete: Trash2, edit: ListChecks, link: ListChecks, vault: ListChecks };
 
 function ago(iso: string) {
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);

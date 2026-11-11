@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { api, notFound } from "@/lib/server/http";
 import { getEnv } from "@/lib/server/env";
+import { reconcileAfterRestore } from "@/modules/obsidian/documents";
 import { BACKUP_PREFIX, parseSnapshot, previewRestore, RestoreError, restoreSnapshot, saveSnapshot } from "@/lib/backup-core";
 
 const body = z.object({
@@ -27,6 +28,8 @@ export const POST = api(async (req) => {
     if (!confirm) return NextResponse.json({ preview });
     const safety = await saveSnapshot(env.DB, env.BACKUPS, "pre-restore");
     const restored = await restoreSnapshot(env.DB, snap);
+    // keep revoked Obsidian notes out: re-apply tombstones, purge anything that came back, rebuild search, then reopen it
+    await reconcileAfterRestore();
     return NextResponse.json({ ok: true, restored, safety_backup: safety.key });
   } catch (err) {
     if (err instanceof RestoreError) return NextResponse.json({ error: err.message }, { status: 400 });
