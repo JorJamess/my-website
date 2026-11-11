@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { ArrowLeft, CalendarDays, ChartColumn, Wallet, Ellipsis, LayoutGrid, Sprout, Target, ListChecks, Loader2, LogOut, Moon, NotebookPen, Plug, Search, Settings, Sun } from "lucide-react";
+import { ArrowLeft, CalendarDays, ChartColumn, Wallet, Ellipsis, LayoutGrid, Sprout, Target, ListChecks, Loader2, LogOut, Moon, NotebookPen, Plug, Search, ShieldCheck, Settings, Sun } from "lucide-react";
+import { useData } from "@/lib/client/use-data";
 import { api, UNAUTHORIZED_EVENT } from "@/lib/client/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -25,12 +26,16 @@ const NAV = [
   { href: "/app/money", label: "Money", icon: Wallet },
   { href: "/app/notes", label: "Notes", icon: NotebookPen },
   { href: "/app/connect", label: "Claude", icon: Plug },
+  { href: "/app/approvals", label: "Approvals", icon: ShieldCheck },
 ] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const pathname = usePathname();
+  // how many of Claude's requests wait for a yes (shown as a badge; refreshes after any change and when the tab regains focus)
+  const { data: waiting } = useData(() => (authed ? api.approvalCount().catch(() => 0) : Promise.resolve(0)), [authed]);
+  const badge = (href: string) => (href === "/app/approvals" && waiting ? waiting : 0);
 
   useEffect(() => {
     api
@@ -86,6 +91,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             >
               <Icon className="size-[17px]" strokeWidth={1.7} />
               {label}
+              {badge(href) > 0 && <span className="ml-auto rounded-full bg-brand px-1.5 text-[11px] text-white">{badge(href)}</span>}
             </Link>
           ))}
         </nav>
@@ -145,7 +151,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 NAV.slice(5).some((n) => isActive(n.href)) && "font-medium text-foreground",
               )}
             >
-              <Ellipsis className="size-5" strokeWidth={1.7} />
+              <span className="relative">
+                <Ellipsis className="size-5" strokeWidth={1.7} />
+                {!!waiting && <span aria-label={`${waiting} waiting for approval`} className="absolute -top-0.5 -right-1 size-2 rounded-full bg-brand" />}
+              </span>
               More
             </PopoverTrigger>
             <PopoverContent side="top" align="end" className="w-48 p-1.5">
@@ -157,6 +166,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 >
                   <Icon className="size-[17px]" strokeWidth={1.7} />
                   {label}
+                  {badge(href) > 0 && <span className="ml-auto rounded-full bg-brand px-1.5 text-[11px] text-white">{badge(href)}</span>}
                 </Link>
               ))}
             </PopoverContent>

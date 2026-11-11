@@ -244,6 +244,17 @@ export const tools: ToolDef[] = [
     },
   }),
   define({
+    name: "list_pending_actions",
+    title: "ดูรายการรออนุมัติ",
+    description: "รายการที่ขอแก้/ลบ/ผูกไว้แล้วและยังรอเจ้าของกดอนุมัติในหน้า Approvals ของแอป (ใช้เช็กก่อนขอซ้ำ)",
+    schema: z.object({}),
+    annotations: { readOnlyHint: true },
+    run: async () => {
+      const list = await repo.listPending();
+      return { count: list.length, pending: list.map((p) => ({ pending_id: p.id, summary: p.summary, asked_at: p.created_at })) };
+    },
+  }),
+  define({
     name: "create_event",
     title: "ลงงานใหม่",
     description:

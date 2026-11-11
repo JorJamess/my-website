@@ -2,6 +2,7 @@
 
 import type { Analytics } from "@/modules/analytics/repo";
 import type { CalendarItems } from "@/modules/calendar/repo";
+import type { AuditEntry, PendingAction } from "@/lib/types";
 import type { CalendarEvent, Category, EventColor, GoalDetail, GoalOverview, HabitOverview, Note, NoteDetail, NoteFolder, SearchAllResult, Summary, Todo } from "@/lib/types";
 import type { MoneyCalendar, MoneySummary, MoneyTransaction } from "@/lib/money-types";
 import type { EventCreateInput, EventUpdateInput, NoteCreateInput, NoteUpdateInput, NoteLinkInput, TodoCreateInput, TodoUpdateInput, HabitCreateInput, HabitUpdateInput, CheckinInput, GoalCreateInput, GoalUpdateInput, MilestoneCreateInput, MilestoneUpdateInput, GoalLinkInput } from "@/lib/schemas";
@@ -88,6 +89,10 @@ export const api = {
     for (const k of ["from", "to", "status", "folder", "tag"] as const) if (f[k]) p.set(k, f[k]!);
     return request<SearchAllResult>(`/api/search/all?${p}`);
   },
+
+  approvals: () => request<{ pending: PendingAction[]; audit: AuditEntry[] }>("/api/approvals"),
+  approvalCount: () => request<{ count: number }>("/api/approvals/count").then((r) => r.count),
+  decideApproval: (id: string, decision: "approve" | "reject") => request<{ action: PendingAction }>(`/api/approvals/${id}`, json("POST", { decision })).then((r) => r.action),
 
   habits: (includeArchived = false) =>
     request<{ habits: HabitOverview[] }>(`/api/habits${includeArchived ? "?archived=1" : ""}`).then((r) => r.habits),

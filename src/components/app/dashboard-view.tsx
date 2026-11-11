@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { CalendarDays, ChevronDown, ListChecks, Loader2, MapPin, Pin, Plus, Repeat, Sprout } from "lucide-react";
+import { CalendarDays, ChevronDown, ListChecks, Loader2, MapPin, Pin, Plus, Repeat, ShieldCheck, Sprout } from "lucide-react";
 import { toast } from "sonner";
 import { api, notifyChanged } from "@/lib/client/api";
 import { useData } from "@/lib/client/use-data";
@@ -52,6 +52,7 @@ export function DashboardView() {
   const { data, loading, error } = useData(() => api.summary(), []);
   const [dialog, setDialog] = useState<{ open: boolean; event: CalendarEvent | null }>({ open: false, event: null });
   const openEvent = (event: CalendarEvent | null) => setDialog({ open: true, event });
+  const { data: waiting } = useData(() => api.approvalCount().catch(() => 0), []);
   const today = data?.today ?? localDateKey();
   const progress = data ? todayProgress(data, today) : null;
   const attentionCount = data ? data.overdue.length + data.overdueTodos.length : 0;
@@ -71,6 +72,16 @@ export function DashboardView() {
           <Plus /> New event
         </Button>
       </header>
+
+      {!!waiting && (
+        <Link href="/app/approvals" className="mb-3 flex items-center gap-2 rounded-lg border bg-brand-soft px-4 py-2.5 text-[14px] transition-colors hover:bg-brand-soft/70">
+          <ShieldCheck className="size-4 shrink-0" strokeWidth={1.8} />
+          <span>
+            Claude is waiting for your OK on {waiting} change{waiting === 1 ? "" : "s"}.
+          </span>
+          <span className="ml-auto text-muted-foreground">Review</span>
+        </Link>
+      )}
 
       {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
 

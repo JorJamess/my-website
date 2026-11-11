@@ -186,3 +186,18 @@ export type SearchAllResult = {
   goals: { id: string; title: string; description: string | null; status: string; target_date: string | null }[];
   habits: { id: string; title: string; archived: boolean }[];
 };
+
+export type ActionRisk = "delete" | "edit" | "link";
+export type PendingStatus = "pending" | "approved" | "rejected" | "failed" | "expired";
+export type PendingAction = {
+  id: string;
+  tool: string;
+  args: Record<string, unknown>;
+  summary: string;
+  risk: ActionRisk;
+  status: PendingStatus;
+  note: string | null;
+  created_at: string;
+  decided_at: string | null;
+};
+export type AuditEntry = { id: string; at: string; actor: "claude" | "you"; action: string; summary: string; ok: boolean; pending_id: string | null };
