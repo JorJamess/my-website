@@ -3,6 +3,7 @@ import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:net";
 import { callService } from "./ipc.js";
 import { dirname } from "node:path";
+import { execFile } from "node:child_process";
 import { ApiError, BridgeClient, DeviceRevokedError, type FetchLike, type PollResult } from "../cloudflare/client.js";
 import { executeCommand, noBackupConfigured, type SafetyBackup } from "../approvals/executor.js";
 import { saveConfig, type BridgeConfig } from "../config/config.js";
@@ -26,6 +27,10 @@ export class NotPairedError extends Error {
     super("This Mac is not paired. Run: obsidian-bridge pair");
   }
 }
+
+/** when a process started, as ps prints it ("" if unknown); a reused process id has a different start time */
+export const processStartTime = (pid: number): Promise<string> =>
+  new Promise((res) => execFile("/bin/ps", ["-o", "lstart=", "-p", String(pid)], { timeout: 3000 }, (e, out) => res(e ? "" : String(out).trim())));
 
 const alive = (pid: number) => {
   try {
@@ -191,12 +196,17 @@ export class BridgeService {
     await mkdir(dirname(f), { recursive: true, mode: 0o700 });
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        await writeFile(f, String(process.pid), { flag: "wx", mode: 0o600 });
+        await writeFile(f, `${process.pid}\n${await processStartTime(process.pid)}`, { flag: "wx", mode: 0o600 });
         return;
       } catch (e) {
         if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
-        const other = Number(await readFile(f, "utf8").catch(() => ""));
-        if (other && other !== process.pid && alive(other)) throw new AlreadyRunningError();
+        const [pidText, ...startParts] = (await readFile(f, "utf8").catch(() => "")).split("\n");
+        const other = Number(pidText);
+        // alive AND the same process that wrote the file: after a reboot the number may belong to something unrelated
+        if (other && other !== process.pid && alive(other)) {
+          const recorded = startParts.join("\n").trim();
+          if (recorded && (await processStartTime(other)) === recorded) throw new AlreadyRunningError();
+        }
         await rm(f, { force: true }); // left behind by a process that is gone
       }
     }
@@ -205,7 +215,7 @@ export class BridgeService {
 
   private async releaseInstance() {
     const f = this.o.pidFile;
-    if (f && Number(await readFile(f, "utf8").catch(() => "")) === process.pid) await rm(f, { force: true });
+    if (f && Number((await readFile(f, "utf8").catch(() => "")).split("\n")[0]) === process.pid) await rm(f, { force: true });
   }
 
   /* ------------------------------- polling ------------------------------- */

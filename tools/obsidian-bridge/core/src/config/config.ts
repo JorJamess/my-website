@@ -3,6 +3,8 @@ import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 
 export class ConfigError extends Error {}
+/** there is no config file yet: nothing to run, which is not a crash */
+export class NotSetUpError extends ConfigError {}
 
 export type BridgeConfig = {
   version: 1;
@@ -109,7 +111,7 @@ export async function loadConfig(file = paths().config): Promise<BridgeConfig> {
   try {
     text = await readFile(file, "utf8");
   } catch {
-    throw new ConfigError("Not set up yet. Run: obsidian-bridge setup");
+    throw new NotSetUpError("Not set up yet. Run: obsidian-bridge setup");
   }
   try {
     return validateConfig(JSON.parse(text));

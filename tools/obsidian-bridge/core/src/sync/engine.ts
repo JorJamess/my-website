@@ -11,7 +11,7 @@ import { scanVault, sha256, type ResolvedPdf, type ScannedNote } from "../vault/
 import { pdfChunks, type PdfExtractor } from "../pdf/extract.js";
 import type { BridgeConfig } from "../config/config.js";
 import type { Logger } from "../logging.js";
-import type { BridgeState } from "./state.js";
+import { CHUNK_FORMAT, type BridgeState } from "./state.js";
 import { readFile } from "node:fs/promises";
 
 export const MAX_TOTAL_CHUNKS = 5000;
@@ -140,7 +140,8 @@ async function syncPdf(ctx: SyncContext, pdf: ResolvedPdf, report: SyncReport): 
   if (prev && prev.size === pdf.size && prev.mtimeMs === pdf.mtimeMs) {
     // nothing about the file changed: don't hash, extract or report it again
     if (prev.status === "synced" || prev.status === "no_text") return prev.id;
-    if (prev.status === "failed" && prev.message === "too large") {
+    // only while the file is still over the current limit: raising pdfMaxBytes must let it through
+    if (prev.status === "failed" && prev.message === "too large" && pdf.status === "too_large") {
       report.pdfIssues.too_large++;
       return null;
     }
@@ -148,7 +149,7 @@ async function syncPdf(ctx: SyncContext, pdf: ResolvedPdf, report: SyncReport): 
       report.blocked.secret++;
       return null;
     }
-    if (prev.status === "failed" && recent(prev.failedAt)) {
+    if (prev.status === "failed" && prev.message !== "too large" && recent(prev.failedAt)) {
       report.pdfIssues.failed++;
       return null;
     }
@@ -267,7 +268,7 @@ export async function syncVault(ctx: SyncContext): Promise<SyncReport> {
       }
       const refsKey = [...new Set(pdfIds)].sort().join(",");
       const prev = state.docs[id];
-      if (prev && prev.status === "synced" && prev.hash === note.hash && prev.refsKey === refsKey) {
+      if (prev && prev.status === "synced" && prev.hash === note.hash && prev.refsKey === refsKey && prev.chunkFormat === CHUNK_FORMAT) {
         if (prev.path !== note.rel) {
           await api.updatePath(id, { path: note.rel, title: note.title });
           state.docs[id] = { ...prev, path: note.rel };
@@ -282,7 +283,7 @@ export async function syncVault(ctx: SyncContext): Promise<SyncReport> {
         ctx,
         { id, kind: "note", title: note.title, path: note.rel, content_hash: note.hash, tags: note.tags, source_updated_at: new Date(note.mtimeMs).toISOString(), grant_version: state.grants[id] ?? 0, sync_version: version, pdf_refs: pdfIds },
         chunks,
-        (v) => (state.docs[id] = { path: note.rel, hash: note.hash, syncVersion: v, status: "synced", refsKey }),
+        (v) => (state.docs[id] = { path: note.rel, hash: note.hash, syncVersion: v, status: "synced", refsKey, chunkFormat: CHUNK_FORMAT }),
       );
       report.uploaded++;
       log.info("synced note", { path: note.rel });
@@ -313,7 +314,7 @@ export async function syncVault(ctx: SyncContext): Promise<SyncReport> {
   const approved = new Set(state.removalApproved);
   const goneApproved = gone.filter((id) => approved.has(id));
   const goneOther = gone.filter((id) => !approved.has(id));
-  state.removalApproved = state.removalApproved.filter((id) => !protectedIds.has(id) && state.docs[id] !== undefined && !goneApproved.includes(id));
+  state.removalApproved = state.removalApproved.filter((id) => !protectedIds.has(id) && state.docs[id] !== undefined); // an approval is dropped only once the removal succeeded
   let toRemove = goneApproved;
   if (scan.counts.unreadable > 0 && goneOther.length) {
     report.errors.push("Some files could not be read, so nothing was removed from the cloud this time");
@@ -328,6 +329,7 @@ export async function syncVault(ctx: SyncContext): Promise<SyncReport> {
       try {
         await api.removeDocument(id);
         delete state.docs[id];
+        state.removalApproved = state.removalApproved.filter((x) => x !== id);
         report.removed++;
       } catch (e) {
         if (e instanceof ApiError && e.transient) throw e;

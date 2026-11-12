@@ -3,10 +3,11 @@ import { join } from "node:path";
 import type { Logger } from "../logging.js";
 import { cycleKeys, dueLabels, modeFor, type Label } from "./schedule.js";
 
-/** while a destination is unavailable (an unplugged SSD) it is looked for at most this often */
-const UNAVAILABLE_RECHECK_MS = 5 * 60_000;
 import { createSnapshot, listSnapshots, listSnapshotSummaries, pruneSnapshots, type SnapshotLabel, type SnapshotManifest } from "./store.js";
 import type { VolumeProvider } from "./volumes.js";
+
+/** while a destination is unavailable (an unplugged SSD) it is looked for at most this often */
+const UNAVAILABLE_RECHECK_MS = 5 * 60_000;
 
 export type BackupSettings = { localPath: string | null; externalPath: string | null; externalVolumeUuid?: string | null; externalSubpath?: string | null; allowUnencrypted?: boolean };
 

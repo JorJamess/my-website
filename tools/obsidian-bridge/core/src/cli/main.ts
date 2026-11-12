@@ -6,7 +6,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { BridgeClient, ApiError } from "../cloudflare/client.js";
-import { ConfigError, isVault, loadConfig, paths, saveConfig, type BridgeConfig } from "../config/config.js";
+import { ConfigError, NotSetUpError, isVault, loadConfig, paths, saveConfig, type BridgeConfig } from "../config/config.js";
 import { fileLogger } from "../logging.js";
 import { createPdfExtractor } from "../pdf/extract.js";
 import { MacKeychain } from "../security/keychain.js";
@@ -43,6 +43,8 @@ const HELP: Record<string, string> = {
   version: "obsidian-bridge version\n  Prints the version.",
 };
 
+const truthyFlag = (v: string | true | undefined) => v === true || v === "1" || v === "true" || v === "yes";
+
 export function parseArgs(argv: string[]) {
   const words: string[] = [];
   const flags: Record<string, string | true> = {};
@@ -53,7 +55,7 @@ export function parseArgs(argv: string[]) {
       const k = eq < 0 ? a.slice(2) : a.slice(2, eq);
       const v = eq < 0 ? undefined : a.slice(eq + 1); // the value may itself contain "="
       if (v !== undefined) flags[k] = v;
-      else if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("-") && !["yes", "json", "help", "confirm-initial"].includes(k)) flags[k] = argv[++i];
+      else if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("-") && !["yes", "json", "help", "confirm-initial", "allow-removals"].includes(k)) flags[k] = argv[++i];
       else flags[k] = true;
     } else if (a === "-n" && argv[i + 1]) flags.n = argv[++i];
     else if (a === "-h") flags.help = true;
@@ -334,12 +336,12 @@ export async function main(argv: string[]): Promise<number> {
       case "doctor":
         return await doctor();
       case "sync": {
-        const live = await callService(paths().socket, flags["confirm-initial"] ? "confirm-initial-sync" : "sync", { allowRemovals: flags["allow-removals"] === true });
+        const live = await callService(paths().socket, flags["confirm-initial"] ? "confirm-initial-sync" : "sync", { allowRemovals: truthyFlag(flags["allow-removals"]) });
         if (live) {
           out(live.ok ? JSON.stringify(live.data, null, 2) : `Error: ${live.error}`);
           return live.ok ? 0 : 1;
         }
-        return await oneShotSync(flags["confirm-initial"] === true, flags["allow-removals"] === true);
+        return await oneShotSync(flags["confirm-initial"] === true, truthyFlag(flags["allow-removals"]));
       }
       case "pause":
       case "resume": {
@@ -397,7 +399,7 @@ export async function main(argv: string[]): Promise<number> {
           await run();
         } catch (e) {
           // "nothing to do" is not a crash: exit cleanly so the login item does not restart it every 15 seconds
-          if (e instanceof AlreadyRunningError || e instanceof NotPairedError || e instanceof ConfigError) return (err(e.message), 0);
+          if (e instanceof AlreadyRunningError || e instanceof NotPairedError || e instanceof NotSetUpError) return (err(e.message), 0);
           throw e;
         }
         return await new Promise<number>(() => {}); // keeps running until a signal

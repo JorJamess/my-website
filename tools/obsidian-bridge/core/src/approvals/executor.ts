@@ -7,10 +7,9 @@ import type { BridgeConfig } from "../config/config.js";
 import type { Logger } from "../logging.js";
 import { atomicWrite, editFileSafely, exists, readText, resolveInVault, VaultFsError, walkVault } from "../vault/fs-safe.js";
 import { parseNote, replaceBody, setFrontmatterKey, UUID_RE } from "../vault/frontmatter.js";
-import { IMAGE_EXT } from "../vault/links.js";
+import { IMAGE_EXT, renderForUpload } from "../vault/links.js";
 import { sha256 } from "../vault/scan.js";
 import { patchBody } from "../vault/patch.js";
-import { renderForUpload } from "../vault/links.js";
 import { lineDiff } from "../shared/diff.js";
 
 export type SafetyBackup = (reason: string) => Promise<{ ok: boolean; message?: string }>;

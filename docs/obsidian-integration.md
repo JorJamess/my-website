@@ -117,6 +117,7 @@ Only you can do these; I did none of them.
 | Edits/deletes are refused | The local backup folder isn't writable or isn't set. Run `obsidian-bridge doctor`. |
 | Deleted notes are still found by Claude | The mass-removal safety brake stopped it. Run `obsidian-bridge sync --allow-removals`. |
 | "The Bridge is already running" | Only one Bridge can run per user. Use the menu bar app or `obsidian-bridge status`; stop it before starting another. |
+| Notes re-upload once after an update | Notes synced by an older Bridge are uploaded again one time, because the stored text format changed (exact line breaks kept). Nothing for you to do. |
 | Search says it is being rebuilt | After a restore. Run Reconcile (`POST /api/obsidian/reconcile`). |
 | Cloudflare quota errors | The Bridge retries with backoff. Check usage; the poll interval can be raised in `config.json` (`pollSeconds`). |
 

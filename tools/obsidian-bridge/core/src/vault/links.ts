@@ -67,10 +67,17 @@ function mapOutsideCode(text: string, fn: (s: string) => string) {
  * `collect` receives every (placeholder, original) pair so an edit can put the originals back.
  */
 export function renderForUpload(markdown: string, collect?: (placeholder: string, original: string) => void): string {
+  // two different embeds that share a file name must stay distinguishable, or an edit could restore the wrong one
+  const originals = new Map<string, string[]>();
   const placeholder = (name: string, image: boolean) => `[${image ? "Image" : "Attachment"} attachment: ${name} — not synchronized]`;
   const note = (ph: string, original: string) => {
-    collect?.(ph, original);
-    return ph;
+    const seen = originals.get(ph) ?? [];
+    if (!originals.has(ph)) originals.set(ph, seen);
+    let k = seen.indexOf(original);
+    if (k < 0) k = seen.push(original) - 1;
+    const shown = k === 0 ? ph : ph.replace(" — not synchronized]", ` (${k + 1}) — not synchronized]`);
+    collect?.(shown, original);
+    return shown;
   };
   return mapOutsideCode(markdown, (seg) => {
     let out = seg.replace(/(!)\[\[([^\]|#\n]+?)(?:#[^\]|\n]*)?(?:\|[^\]\n]*)?\]\]/g, (full, _bang: string, target: string) => {
@@ -79,7 +86,7 @@ export function renderForUpload(markdown: string, collect?: (placeholder: string
       if (ATTACHMENT_EXT.has(ext)) return note(placeholder(basename(target.trim()), false), full);
       return full;
     });
-    out = out.replace(/!\[[^\]\n]*\]\(\s*(<[^>\n]+>|[^)\s]+)(?:\s+"[^"\n]*")?\s*\)/g, (full, raw: string) => {
+    out = out.replace(/!\[[^\]\n]*\]\([ \t]*(<[^>\n]+>|[^)\s]+)(?:[ \t]+"[^"\n]*")?[ \t]*\)/g, (full, raw: string) => {
       const t = cleanMdTarget(raw);
       if (isExternal(t)) return full;
       const ext = extOf(t);

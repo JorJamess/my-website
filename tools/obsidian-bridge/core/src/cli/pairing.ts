@@ -1,6 +1,7 @@
 // The one place where a Mac gets paired and its config written. Setup, `pair` and the Menu Bar app's wizard all use it,
 // so they validate the same things and fail the same safe way.
-import { isAbsolute, relative, resolve } from "node:path";
+import { realpath } from "node:fs/promises";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { MacVolumes } from "../backup/volumes.js";
 import { BridgeClient, type FetchLike } from "../cloudflare/client.js";
 import { isVault, saveConfig, type BridgeConfig } from "../config/config.js";
@@ -20,13 +21,26 @@ export type PairInput = {
 
 export const insideOrSame = (child: string, parent: string) => {
   const rel = relative(resolve(parent), resolve(child));
-  return !rel || (!rel.startsWith("..") && !isAbsolute(rel));
+  return !rel || (rel !== ".." && !rel.startsWith("../") && !isAbsolute(rel));
 };
 
-/** Folder rules that protect the vault and the backups: a real vault, and a backup folder that is not inside it. */
-export async function validateFolders(vault: string, backup: string | null) {
+/** The real location of a path, following symlinks; a folder that does not exist yet is resolved through its nearest existing parent. */
+async function realish(p: string): Promise<string> {
+  const abs = resolve(p);
+  try {
+    return await realpath(abs);
+  } catch {
+    const parent = dirname(abs);
+    return parent === abs ? abs : join(await realish(parent), abs.slice(parent.length + 1));
+  }
+}
+
+/** Folder rules that protect the vault and the backups: a real vault, and backup folders (local and external) that are not inside it. */
+export async function validateFolders(vault: string, backup: string | null, external: string | null = null) {
   if (!(await isVault(vault))) throw new Error("That folder is not an Obsidian vault (no .obsidian folder inside).");
-  if (backup && insideOrSame(backup, vault)) throw new Error("The backup folder can't be inside the vault.");
+  const v = await realish(vault);
+  if (backup && insideOrSame(await realish(backup), v)) throw new Error("The backup folder can't be inside the vault.");
+  if (external && insideOrSame(await realish(external), v)) throw new Error("The external backup folder can't be inside the vault.");
 }
 
 export async function buildConfig(prev: BridgeConfig | null, i: PairInput, deviceId: string | undefined): Promise<BridgeConfig> {
@@ -62,7 +76,7 @@ export async function buildConfig(prev: BridgeConfig | null, i: PairInput, devic
  * the old token is deleted only after the new config was written, so a failure never leaves the Mac unpaired.
  */
 export async function pairAndSave(deps: { credentials: CredentialStore; fetch?: FetchLike }, prev: BridgeConfig | null, i: PairInput) {
-  await validateFolders(resolve(i.vault), i.backup);
+  await validateFolders(resolve(i.vault), i.backup, i.external);
   const oldId = prev?.deviceId;
   let deviceId = oldId;
   let created = false;

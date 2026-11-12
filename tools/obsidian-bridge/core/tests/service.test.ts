@@ -2,7 +2,7 @@ import { mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { AlreadyRunningError, BridgeService, NotPairedError } from "../src/service/daemon.js";
+import { AlreadyRunningError, BridgeService, NotPairedError, processStartTime } from "../src/service/daemon.js";
 import { callService } from "../src/service/ipc.js";
 import { MemoryCredentialStore } from "../src/security/keychain.js";
 import { emptyState } from "../src/sync/state.js";
@@ -280,12 +280,20 @@ describe("one Bridge at a time, and no restart loop", () => {
     await writeFile(join(b.home, "bridge.pid"), "999999");
     const svc = make(b);
     await svc.start();
-    expect(Number(await readFile(join(b.home, "bridge.pid"), "utf8"))).toBe(process.pid);
+    expect(Number((await readFile(join(b.home, "bridge.pid"), "utf8")).split("\n")[0])).toBe(process.pid);
     await svc.stop();
     await expect(readFile(join(b.home, "bridge.pid"), "utf8")).rejects.toThrow();
     // and a live process id (this one) written by someone else blocks
-    await writeFile(join(b.home, "bridge.pid"), String(process.ppid));
+    await writeFile(join(b.home, "bridge.pid"), `${process.ppid}\n${await processStartTime(process.ppid)}`);
     await expect(make(b).start()).rejects.toThrow(AlreadyRunningError);
+  });
+  it("a process id reused by an unrelated process (different start time) does not lock the Bridge out", async () => {
+    const b = await baseOpts();
+    await writeFile(join(b.home, "bridge.pid"), `${process.ppid}\nMon Jan  1 00:00:00 2001`);
+    const svc = make(b);
+    await svc.start();
+    cleanups.push(() => svc.stop());
+    expect((await callService(join(b.home, "b.sock"), "status"))!.ok).toBe(true);
   });
   it("an unpaired Mac is reported as such, and leaves nothing behind", async () => {
     const b = await baseOpts();
@@ -307,6 +315,9 @@ describe("one Bridge at a time, and no restart loop", () => {
         cleanups.push(v.cleanup);
         await saveConfig(validateConfig({ version: 1, lifeosUrl: "https://x.test", vaultPath: v.dir, vaultName: "V", deviceName: "M", backup: { localPath: null, externalPath: null } }));
         expect(await main(["run"])).toBe(0);
+        // a config that cannot be read is a real fault: exit non-zero so launchd tries again
+        await writeFile(join(home, "config.json"), "{not json");
+        expect(await main(["run"])).toBe(1);
       } finally {
         process.stderr.write = e;
       }
@@ -325,5 +336,9 @@ describe("command line arguments", () => {
     expect(words).toEqual(["setup"]);
     expect(flags).toEqual({ url: "https://host.example/?tenant=a&x=1", vault: "/Users/me/Notes=old", yes: true, name: "My Mac", code: "AB=CD" });
     expect(parseArgs(["sync", "--allow-removals"]).flags["allow-removals"]).toBe(true);
+    // a boolean flag does not swallow the word after it
+    const a = parseArgs(["sync", "--allow-removals", "extra"]);
+    expect(a.flags["allow-removals"]).toBe(true);
+    expect(a.words).toEqual(["sync", "extra"]);
   });
 });

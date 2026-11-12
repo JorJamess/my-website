@@ -2,9 +2,11 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ApiError } from "../src/cloudflare/client.js";
+import { CHUNK_FORMAT } from "../src/sync/state.js";
 import { findNoteById, setSyncFlag, syncVault, SyncNotConfirmedError } from "../src/sync/engine.js";
 import { parseNote } from "../src/vault/frontmatter.js";
-import { FakeApi, hasNative, ID, makePdf, makeCtx, makeVault, NOTE } from "./helpers/vault.js";
+import { createPdfExtractor } from "../src/pdf/extract.js";
+import { FakeApi, hasNative, ID, makePdf, makeCtx, makeVault, NATIVE, NOTE } from "./helpers/vault.js";
 
 let cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -400,5 +402,45 @@ describe("review fixes: removals the owner approved, and no repeated work", () =
     expect(extracts).toBe(first);
     expect(r.pdfIssues).toMatchObject({ too_large: 1, failed: 1 });
     expect(r.blocked.secret).toBe(1);
+  });
+});
+
+describe("review fixes round two", () => {
+  it("an approval survives a failed removal and is used on the retry", async () => {
+    const { v, api, ctx } = await setup();
+    for (let i = 1; i <= 15; i++) await v.write(`Old/n${i}.md`, NOTE(ID(i), true, `note ${i}`));
+    await syncVault(ctx);
+    ctx.state.removalApproved = Object.keys(ctx.state.docs);
+    await rm(join(v.dir, "Old"), { recursive: true });
+    api.failWith = new ApiError(503, "unavailable", "try later");
+    await expect(syncVault(ctx)).rejects.toThrow();
+    expect(ctx.state.removalApproved.length).toBe(15);
+    api.failWith = null;
+    const r = await syncVault(ctx);
+    expect(r).toMatchObject({ removed: 15, removalBrake: false });
+    expect(ctx.state.removalApproved).toEqual([]);
+  });
+  it("notes synced in the old chunk format are uploaded again once, then left alone", async () => {
+    const { v, api, ctx } = await setup();
+    await v.write("a.md", NOTE(ID(1), true, "hello"));
+    await syncVault(ctx);
+    expect(ctx.state.docs[ID(1)].chunkFormat).toBe(CHUNK_FORMAT);
+    delete ctx.state.docs[ID(1)].chunkFormat; // as left by the previous version
+    api.calls.length = 0;
+    expect((await syncVault(ctx)).uploaded).toBe(1);
+    expect(ctx.state.docs[ID(1)].chunkFormat).toBe(CHUNK_FORMAT);
+    expect((await syncVault(ctx)).uploaded).toBe(0);
+  });
+  it.skipIf(!hasNative)("raising pdfMaxBytes lets a PDF that was too large through, although the file did not change", async () => {
+    const { v, api, ctx } = await setup({ pdfMaxBytes: 2048 });
+    makePdf(join(v.dir, "big.pdf"), "Helvetica", `${"word ".repeat(1500)}`);
+    await v.write("n.md", NOTE(ID(1), true, "![[big.pdf]]"));
+    expect((await syncVault(ctx)).pdfIssues.too_large).toBe(1);
+    expect((await syncVault(ctx)).pdfIssues.too_large).toBe(1); // still over the limit: unchanged
+    ctx.cfg.pdfMaxBytes = 50_000_000;
+    ctx.extractPdf = createPdfExtractor(join(NATIVE, "pdf-text"), { maxBytes: 50_000_000 }); // the service builds this from the config at start
+    const r = await syncVault(ctx);
+    expect(r.pdfIssues.too_large).toBe(0);
+    expect([...api.docs.values()].some((d) => d.body.kind === "pdf" && d.body.pdf!.state === "completed")).toBe(true);
   });
 });

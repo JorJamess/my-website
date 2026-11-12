@@ -102,7 +102,8 @@ describe("setup wizard steps (used by the Menu Bar app)", () => {
 });
 
 import { chmod } from "node:fs/promises";
-import { pairAndSave } from "../src/cli/pairing.js";
+import { insideOrSame, pairAndSave, validateFolders } from "../src/cli/pairing.js";
+import { symlink } from "node:fs/promises";
 import { loadConfig, saveConfig, validateConfig } from "../src/config/config.js";
 import type { CredentialStore } from "../src/security/keychain.js";
 
@@ -178,5 +179,28 @@ describe("pairing is one code path with safe failure", () => {
     cleanups.push(v.cleanup);
     await expect(pairAndSave({ credentials: new MemoryCredentialStore() }, null, input(v.dir, null, { code: undefined }))).rejects.toThrow(/pairing code is needed/);
     void validateConfig;
+  });
+});
+
+describe("backup folder checks", () => {
+  it("a folder named like ..bk inside the vault is inside; a sibling is not", () => {
+    expect(insideOrSame("/v/..bk", "/v")).toBe(true);
+    expect(insideOrSame("/v/sub", "/v")).toBe(true);
+    expect(insideOrSame("/v2", "/v")).toBe(false);
+    expect(insideOrSame("/other/x", "/v")).toBe(false);
+  });
+  it("covers the external folder and follows symlinks into the vault", async () => {
+    const v = await makeVault();
+    const outside = await realpath(await mkdtemp(join(tmpdir(), "outside-")));
+    try {
+      await expect(validateFolders(v.dir, join(v.dir, "..bk"))).rejects.toThrow(/inside the vault/);
+      await expect(validateFolders(v.dir, null, join(v.dir, "ext"))).rejects.toThrow(/external/);
+      await symlink(v.dir, join(outside, "link"));
+      await expect(validateFolders(v.dir, join(outside, "link", "backups"))).rejects.toThrow(/inside the vault/);
+      await expect(validateFolders(v.dir, join(outside, "ok"), join(outside, "ext"))).resolves.toBeUndefined();
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+      await v.cleanup();
+    }
   });
 });

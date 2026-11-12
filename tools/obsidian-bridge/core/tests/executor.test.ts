@@ -300,3 +300,20 @@ describe("editing keeps what Claude could not see", () => {
     expect(String(r.conflict!.diff)).toContain("-line EDITED");
   });
 });
+
+describe("placeholders for embeds that share a file name", () => {
+  it("are told apart, and an edit restores the right original", () => {
+    const body = "one ![[a/x.png|200]]\ntwo ![[b/x.png]]\nthree ![[b/x.png]]\n";
+    const view = renderForUpload(body);
+    expect(view.split("\n").length).toBe(body.split("\n").length);
+    const lines = view.split("\n");
+    expect(lines[1]).not.toBe(lines[0].replace("one", "two"));
+    expect(lines[1].replace("two", "three")).toBe(lines[2]); // the same embed twice keeps one placeholder
+    const out = patchBody(body, view.replace("two", "TWO"))!;
+    expect(out).toBe("one ![[a/x.png|200]]\nTWO ![[b/x.png]]\nthree ![[b/x.png]]\n");
+  });
+  it("a markdown image never swallows a line break", () => {
+    const body = "![alt](\nphoto.png)\nnext\n";
+    expect(renderForUpload(body).split("\n").length).toBe(body.split("\n").length);
+  });
+});
