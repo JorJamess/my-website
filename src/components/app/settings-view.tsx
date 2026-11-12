@@ -8,13 +8,12 @@ import { useData } from "@/lib/client/use-data";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Pupu, PUPU_POSE_LABELS, PUPU_POSES } from "./pupu";
-import { ObsidianSettings } from "./obsidian-settings";
 
 type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString("en-US", { timeZone: "Asia/Bangkok", dateStyle: "medium", timeStyle: "short" });
-const TABLE_LABELS: Record<string, string> = { events: "events", notes: "notes", todos: "to-dos", habits: "habits", habit_checkins: "check-ins", categories: "categories", goals: "goals", milestones: "milestones", goal_links: "links", event_exceptions: "skipped repeats", note_tags: "tags", note_links: "note links", obsidian_revocations: "Obsidian revocations" };
+const TABLE_LABELS: Record<string, string> = { events: "events", notes: "notes", todos: "to-dos", habits: "habits", habit_checkins: "check-ins", categories: "categories", goals: "goals", milestones: "milestones", goal_links: "links", event_exceptions: "skipped repeats", note_tags: "tags", note_links: "note links" };
 const REASONS: Record<string, string> = { weekly: "Weekly", manual: "Manual", "pre-restore": "Before a restore" };
 const countsText = (b: { counts?: Record<string, number>; events?: number; notes?: number }) => {
   const c = b.counts ?? { events: b.events ?? 0, notes: b.notes ?? 0 };
@@ -30,7 +29,6 @@ export function SettingsView() {
       <h1 className="text-[26px] font-medium tracking-tight">Settings</h1>
       <Visits />
       <Backups />
-      <ObsidianSettings />
       <Security />
       <InstallApp />
       <MeetPupu />

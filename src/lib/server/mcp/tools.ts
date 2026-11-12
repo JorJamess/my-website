@@ -21,7 +21,6 @@ import * as repo from "@/lib/server/repo";
 import { listMessages, setMessageRead } from "@/lib/server/messages";
 import { getVisitStats } from "@/lib/analytics-core";
 import { getEnv } from "@/lib/server/env";
-import { obsidianTools } from "./obsidian-tools";
 import { addDaysKey, formatLocal, localDateKey } from "@/lib/time";
 import { repeatLabel } from "@/lib/recurrence";
 import { scheduleLabel } from "@/lib/habits";
@@ -800,12 +799,8 @@ tools.push(
   }),
 );
 
-// Obsidian tools: reads see only shared notes; proposals only ever create approval requests
-tools.push(...obsidianTools);
-
-/** `proposals: false` hides the Obsidian propose_* tools (the owner turned them off); the default lists everything. */
-export function toolList(opts: { proposals?: boolean } = {}) {
-  return tools.filter((t) => opts.proposals !== false || !t.name.startsWith("propose_")).map((t) => {
+export function toolList() {
+  return tools.map((t) => {
     const inputSchema = z.toJSONSchema(t.schema, { io: "input" }) as Record<string, unknown>;
     delete inputSchema.$schema;
     return {

@@ -11,13 +11,7 @@ const toPending = (r: PendingRow): PendingAction => ({ ...r, args: JSON.parse(r.
 async function expireOld() {
   const { db } = await ctx();
   const cutoff = new Date(Date.now() - EXPIRES_DAYS * 86_400_000).toISOString();
-  const nowIso = new Date().toISOString();
-  await db.prepare("UPDATE pending_actions SET status = 'expired', decided_at = ?1 WHERE status = 'pending' AND risk <> 'vault' AND created_at < ?2").bind(nowIso, cutoff).run();
-  // vault proposals keep their own expiry (e.g. 24 h for deletes, 30 days for new notes); see src/modules/obsidian/commands.ts
-  await db
-    .prepare("UPDATE pending_actions SET status = 'expired', decided_at = ?1 WHERE status = 'pending' AND risk = 'vault' AND id IN (SELECT pending_id FROM obsidian_commands WHERE status = 'awaiting_approval' AND expires_at < ?1)")
-    .bind(nowIso)
-    .run();
+  await db.prepare("UPDATE pending_actions SET status = 'expired', decided_at = ?1 WHERE status = 'pending' AND created_at < ?2").bind(new Date().toISOString(), cutoff).run();
 }
 
 /** Queue a change for the owner's approval. Asking for the exact same change twice returns the one already waiting. */

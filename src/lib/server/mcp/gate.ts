@@ -4,7 +4,6 @@ import * as repo from "@/lib/server/repo";
 import { ctx } from "@/modules/core";
 import type { ActionRisk, PendingAction } from "@/lib/types";
 import { tools } from "./tools";
-import { approveVaultCommand, isVaultTool, rejectVaultCommand } from "@/modules/obsidian/commands";
 
 /**
  * Claude's tools split three ways:
@@ -24,8 +23,6 @@ const TICK_ONLY: Record<string, string[]> = {
 };
 
 export function riskOf(tool: string, args: Record<string, unknown>): ActionRisk | null {
-  // changes to the Obsidian vault never run in the Worker: they are queued for the Mac after approval
-  if (isVaultTool(tool)) return "vault";
   if (DELETES.has(tool)) return "delete";
   if (LINKS.has(tool)) return "link";
   if (EDITS.has(tool)) {
@@ -99,7 +96,6 @@ export function queuedReply(p: PendingAction) {
 export async function approvePending(id: string, tz: string): Promise<PendingAction | null> {
   const p = await repo.getPending(id);
   if (!p || p.status !== "pending") return null;
-  if (p.risk === "vault") return approveVaultCommand(id);
   const tool = tools.find((t) => t.name === p.tool);
   // claim it first so a double click can't run it twice
   const claimed = await repo.decide(id, "approved");
@@ -122,7 +118,6 @@ export async function approvePending(id: string, tz: string): Promise<PendingAct
 
 export async function rejectPending(id: string): Promise<PendingAction | null> {
   const p = await repo.decide(id, "rejected");
-  if (p?.risk === "vault") await rejectVaultCommand(id);
   if (p) await repo.logAudit({ actor: "you", action: "reject", summary: `Rejected: ${p.summary}`, pendingId: id });
   return p;
 }

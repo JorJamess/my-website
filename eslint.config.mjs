@@ -20,8 +20,6 @@ const eslintConfig = defineConfig([
     "docs/**",
     "shots/**",
     "scripts/**",
-    // the Mac Bridge is its own package with its own checks
-    "tools/**",
   ]),
 ]);
 
