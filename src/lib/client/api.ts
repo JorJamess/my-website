@@ -165,6 +165,7 @@ export const api = {
   obsidianFindings: () =>
     request<{ findings: { id: string; document_id: string; kind: string; line: number; redacted: string; status: string; title: string; path: string }[] }>("/api/obsidian/findings").then((r) => r.findings),
   obsidianExceptFinding: (id: string) => request<{ ok: true }>(`/api/obsidian/findings/${id}`, json("POST")),
+  obsidianProposals: (enabled: boolean) => request<{ enabled: boolean }>("/api/obsidian/proposals", json("POST", { enabled })),
   obsidianPair: () => request<{ code: string; expires_at: string }>("/api/obsidian/pair", json("POST")),
   obsidianDevice: (id: string, action: "revoke" | "pause" | "resume" | "sync") => request<{ ok: true }>(`/api/obsidian/devices/${id}`, json("POST", { action })),
   obsidianRevoke: (id: string) => request<{ grant_version: number }>(`/api/obsidian/documents/${encodeURIComponent(id)}/revoke`, json("POST", {})),

@@ -8,6 +8,7 @@ Design decisions and the reasons behind them: `docs/adr/0002-obsidian-bridge.md`
 - Obsidian stays the **source of truth**. The vault never leaves the Mac.
 - A small service on the Mac, the **Obsidian Bridge**, sends only the notes you marked to LifeOS (Cloudflare D1). Claude (claude.ai and mobile) can search and read those copies through the existing MCP server, **even when the Mac is off**.
 - Claude can *propose* creating, editing, renaming, moving and deleting notes and folders. Nothing happens until you approve in LifeOS, and the Mac applies it when it is online.
+- **Proposals are off until you turn them on** (LifeOS → Settings → Obsidian → "Let Claude propose changes"). While off, the nine `propose_*` tools are hidden from Claude and refuse if called; searching and reading are unaffected. Turning it off stops new proposals only: ones already waiting stay in Approvals. Only you can change the switch (it needs your login); Claude cannot.
 - The Bridge also backs up the whole vault to a local folder and an optional external SSD, with restore.
 
 ```
@@ -91,7 +92,7 @@ Tools on the existing MCP server: `search_obsidian_knowledge`, `read_obsidian_no
 Only you can do these; I did none of them.
 1. In LifeOS Settings click **Back up now**.
 2. Run `npm run db:migrate:remote` (migration `0013_obsidian_integration.sql`, additive) and check it with the usual status command.
-3. Set the Worker secret: `wrangler secret put OBSIDIAN_PAYLOAD_KEY` with 32 random bytes in base64 (for example `openssl rand -base64 32`). Without it reads work but `propose_*` refuses.
+3. Set the Worker secret: `wrangler secret put OBSIDIAN_PAYLOAD_KEY` with 32 random bytes in base64 (for example `openssl rand -base64 32`). Without it reads work but `propose_*` refuses. After the push, also turn on "Let Claude propose changes" in Settings when you want that part.
 4. Look at your Cloudflare dashboard for current daily request and D1 usage.
 5. Push to `main` when you have reviewed everything (Workers Builds deploys).
 6. On the Mac: `tools/obsidian-bridge/scripts/build.sh`, `build-app.sh`, open the app (first time: right-click → Open), run the Setup Wizard, pair with the code from Settings → Obsidian, review the preview, confirm.

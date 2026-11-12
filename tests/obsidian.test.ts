@@ -11,11 +11,13 @@ import { deviceApi } from "@/lib/server/device-api";
 import { BACKUP_TABLES, buildSnapshot, parseSnapshot, restoreSnapshot } from "@/lib/backup-core";
 import * as repo from "@/lib/server/repo";
 import { freshEnv } from "./helpers/env";
+import { setProposalsEnabled } from "@/modules/obsidian/documents";
 
 const KEY = btoa("0123456789abcdef0123456789abcdef");
 let env: CloudflareEnv;
-beforeEach(() => {
+beforeEach(async () => {
   env = freshEnv({ OBSIDIAN_PAYLOAD_KEY: KEY });
+  await setProposalsEnabled(true);
 });
 afterEach(() => vi.useRealTimers());
 
@@ -383,6 +385,7 @@ describe("vault proposals and approval", () => {
   });
   it("refuses to queue when the encryption secret is missing", async () => {
     freshEnv();
+    await setProposalsEnabled(true); // only the missing key should stop it
     await expect(queueVaultProposal({ op: "create_folder", payload: { path: "X" }, summary: "s" })).rejects.toThrow(/OBSIDIAN_PAYLOAD_KEY/);
   });
   it("flags a proposal that contains a possible secret but still allows it", async () => {

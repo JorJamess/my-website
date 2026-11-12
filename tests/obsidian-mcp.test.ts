@@ -2,14 +2,15 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { handleMcpPost } from "@/lib/server/mcp/handler";
 import { approvePending } from "@/lib/server/mcp/gate";
 import * as repo from "@/lib/server/repo";
-import { revokeDocument, upload, type UploadInput } from "@/modules/obsidian/documents";
+import { proposalsEnabled, revokeDocument, setProposalsEnabled, upload, type UploadInput } from "@/modules/obsidian/documents";
 import { createPairingCode, completePairing } from "@/modules/obsidian/devices";
 import { freshEnv } from "./helpers/env";
 
 const KEY = btoa("0123456789abcdef0123456789abcdef");
 let env: CloudflareEnv;
-beforeEach(() => {
+beforeEach(async () => {
   env = freshEnv({ OBSIDIAN_PAYLOAD_KEY: KEY });
+  await setProposalsEnabled(true); // proposals are off by default; most tests need them
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -122,6 +123,7 @@ describe("proposals", () => {
     expect((await call("propose_create_note", { path: "big.md", content: "x".repeat(900_001) })).isError).toBe(true);
     expect(await pending()).toHaveLength(0);
     freshEnv();
+    await setProposalsEnabled(true); // only the missing key should stop it
     expect((await call("propose_create_note", { path: "a.md", content: "x" })).text).toMatch(/OBSIDIAN_PAYLOAD_KEY/);
   });
   it("edit: only for shared notes, and only with the hash that was read", async () => {
@@ -180,5 +182,33 @@ describe("proposals", () => {
     expect(created.isError).toBe(false);
     const del = await call("delete_note", { id: created.data.created.id });
     expect(del.data).toMatchObject({ queued: true });
+  });
+});
+
+describe("the owner's switch for proposals", () => {
+  const list = async () => {
+    const res = await handleMcpPost(new Request("http://x", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) }));
+    return ((await res.json()) as { result: { tools: { name: string }[] } }).result.tools.map((t) => t.name);
+  };
+  it("is off on a fresh install, and then Claude cannot see or use any propose tool, while reading still works", async () => {
+    freshEnv({ OBSIDIAN_PAYLOAD_KEY: KEY });
+    expect(await proposalsEnabled()).toBe(false);
+    const names = await list();
+    expect(names.some((n) => n.startsWith("propose_"))).toBe(false);
+    for (const n of ["search_obsidian_knowledge", "read_obsidian_note", "read_obsidian_pdf", "obsidian_status", "get_summary"]) expect(names).toContain(n);
+    const r = await call("propose_create_note", { path: "A/new.md", content: "x" });
+    expect(r.isError).toBe(true);
+    expect(r.text).toMatch(/ปิด/);
+    expect((await call("obsidian_status")).data.proposals_enabled).toBe(false);
+    expect(await repo.listPending()).toEqual([]);
+  });
+  it("turning it on shows the tools and queues proposals; turning it off again stops new ones but keeps queued ones", async () => {
+    expect((await list()).filter((n) => n.startsWith("propose_")).length).toBe(9);
+    const first = await call("propose_create_note", { path: "A/one.md", content: "x" });
+    expect(first.isError).toBe(false);
+    await setProposalsEnabled(false);
+    expect((await list()).some((n) => n.startsWith("propose_"))).toBe(false);
+    expect((await call("propose_create_note", { path: "A/two.md", content: "x" })).isError).toBe(true);
+    expect((await repo.listPending()).length).toBe(1);
   });
 });

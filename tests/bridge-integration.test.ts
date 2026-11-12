@@ -31,6 +31,7 @@ import { exceptFinding, listFindings, readDocument, revokeDocument, reenableDocu
 import { queueVaultProposal } from "@/modules/obsidian/commands";
 import { handleMcpPost } from "@/lib/server/mcp/handler";
 import { freshEnv } from "./helpers/env";
+import { setProposalsEnabled } from "@/modules/obsidian/documents";
 
 const KEY = btoa("0123456789abcdef0123456789abcdef");
 const BASE = "https://lifeos.test";
@@ -72,6 +73,7 @@ const cleanup: (() => Promise<unknown>)[] = [];
 
 beforeEach(async () => {
   env = freshEnv({ OBSIDIAN_PAYLOAD_KEY: KEY });
+  await setProposalsEnabled(true);
   offline = false;
   dropResults = false;
   dir = await realpath(await mkdtemp(join(tmpdir(), "int-vault-")));

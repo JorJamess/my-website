@@ -201,6 +201,7 @@ export const obsidianTools: Def[] = [
         waiting_for_approval: s.commands.find((c) => c.status === "awaiting_approval")?.n ?? 0,
         approved_waiting_for_mac: (s.commands.find((c) => c.status === "approved")?.n ?? 0) + (s.commands.find((c) => c.status === "claimed")?.n ?? 0),
         approvals_configured: s.approvals_configured,
+        proposals_enabled: s.proposals_enabled,
       };
     },
   }),

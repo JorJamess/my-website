@@ -145,6 +145,29 @@ export function ObsidianSettings() {
         )}
 
         {device && <PairCard onDone={reloadAll} compact approvalsConfigured={!!s?.approvals_configured} />}
+        {device && (
+          <div className="rounded-lg border bg-card p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-[15px] font-medium">Let Claude propose changes</p>
+                <p className="mt-1 text-[13.5px] text-muted-foreground">
+                  {s?.proposals_enabled
+                    ? "On: Claude can ask to create, edit, rename, move or delete notes and folders. Nothing happens until you approve it in Approvals, and your Mac applies it after a backup."
+                    : "Off: Claude can search and read shared notes, but can't ask to change anything. Turn this on when you're ready."}
+                </p>
+              </div>
+              <Button
+                variant={s?.proposals_enabled ? "outline" : "default"}
+                className="px-4"
+                disabled={busy === "proposals"}
+                onClick={() => act("proposals", () => api.obsidianProposals(!s?.proposals_enabled), s?.proposals_enabled ? "Claude can no longer propose changes" : "Claude can now propose changes")}
+              >
+                {busy === "proposals" ? <Loader2 className="animate-spin" /> : null} {s?.proposals_enabled ? "Turn off" : "Turn on"}
+              </Button>
+            </div>
+            {s?.proposals_enabled && <p className="mt-2 text-[13px] text-muted-foreground">Turning it off stops new proposals only. Ones already waiting stay in Approvals and you can still approve or reject them.</p>}
+          </div>
+        )}
         {device && <Findings busy={busy} act={act} />}
         {device && <Documents busy={busy} act={act} setConfirm={setConfirm} />}
 

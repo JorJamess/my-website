@@ -5,6 +5,7 @@ import { decryptPayload, encryptPayload } from "@/lib/obsidian/crypto";
 import { scanForSecrets } from "@/lib/obsidian/secrets";
 import { PathError, validateVaultPath } from "@/lib/obsidian/paths";
 import { getEnv } from "@/lib/server/env";
+import { proposalsEnabled } from "./documents";
 
 /* Changes Claude can ask for in the vault. They never run in the Worker: after the owner approves, the Mac applies them. */
 
@@ -113,6 +114,7 @@ function checkPaths(op: VaultOp, payload: Record<string, unknown>) {
 export async function queueVaultProposal(input: { op: VaultOp; payload: Record<string, unknown>; summary: string }) {
   const spec = VAULT_OPS[input.op];
   if (!spec) throw new InputError("Unknown vault operation");
+  if (!(await proposalsEnabled())) throw new InputError("เจ้าของปิดการเสนอแก้ Obsidian อยู่ (เปิดได้ที่ LifeOS → Settings → Obsidian) ตอนนี้ Claude อ่านและค้นได้อย่างเดียว");
   checkPaths(input.op, input.payload);
   const plain = JSON.stringify(input.payload);
   if (new TextEncoder().encode(plain).length > MAX_PAYLOAD_BYTES) throw new InputError("The proposal is larger than 1 MB");

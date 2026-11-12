@@ -475,6 +475,18 @@ export async function setSearchReady(ready: boolean) {
   await db.prepare("INSERT INTO app_settings (key, value) VALUES ('obsidian_search_ready', ?1) ON CONFLICT(key) DO UPDATE SET value = ?1").bind(ready ? "1" : "0").run();
 }
 
+/** Claude's proposals (create/edit/rename/move/delete) are off until the owner turns them on in LifeOS. Reading is never affected. */
+export async function proposalsEnabled() {
+  const { db } = await ctx();
+  const r = await db.prepare("SELECT value FROM app_settings WHERE key = 'obsidian_proposals_enabled'").first<{ value: string }>();
+  return r?.value === "1";
+}
+
+export async function setProposalsEnabled(enabled: boolean) {
+  const { db } = await ctx();
+  await db.prepare("INSERT INTO app_settings (key, value) VALUES ('obsidian_proposals_enabled', ?1) ON CONFLICT(key) DO UPDATE SET value = ?1").bind(enabled ? "1" : "0").run();
+}
+
 export async function searchReady() {
   const { db } = await ctx();
   const r = await db.prepare("SELECT value FROM app_settings WHERE key = 'obsidian_search_ready'").first<{ value: string }>();
@@ -674,6 +686,7 @@ export async function getObsidianStatus() {
     commands: cmds.results as { status: string; n: number }[],
     sync: sync.results,
     search_ready: await searchReady(),
+    proposals_enabled: await proposalsEnabled(),
     approvals_configured: !!env.OBSIDIAN_PAYLOAD_KEY,
   };
 }

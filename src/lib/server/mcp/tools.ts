@@ -803,8 +803,9 @@ tools.push(
 // Obsidian tools: reads see only shared notes; proposals only ever create approval requests
 tools.push(...obsidianTools);
 
-export function toolList() {
-  return tools.map((t) => {
+/** `proposals: false` hides the Obsidian propose_* tools (the owner turned them off); the default lists everything. */
+export function toolList(opts: { proposals?: boolean } = {}) {
+  return tools.filter((t) => opts.proposals !== false || !t.name.startsWith("propose_")).map((t) => {
     const inputSchema = z.toJSONSchema(t.schema, { io: "input" }) as Record<string, unknown>;
     delete inputSchema.$schema;
     return {
