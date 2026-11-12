@@ -4,7 +4,7 @@ import { dirname } from "node:path";
 export type DocStatus = "synced" | "blocked_secret" | "blocked_revoked" | "failed" | "no_text" | "pending";
 export type DocState = { path: string; hash: string; syncVersion: number; status: DocStatus; refsKey: string; /** how the text was chunked when uploaded; an older format is uploaded again */ chunkFormat?: number; message?: string; /** how many owner-approved findings existed when it was last scanned */ exceptionCount?: number; failedAt?: string };
 export type PdfState = { id: string; size: number; mtimeMs: number; hash: string; syncVersion: number; status: DocStatus; pages?: number; message?: string; exceptionCount?: number; failedAt?: string };
-/** 2 = chunks are an exact partition of the text (joined with nothing in between); older uploads were trimmed and joined with blank lines */
+/** Markdown notes only (PDF chunking did not change). 2 = chunks are an exact partition of the text (joined with nothing in between); older uploads were trimmed and joined with blank lines */
 export const CHUNK_FORMAT = 2;
 export type ExceptionState = { docId: string; fingerprint: string; contentHash: string };
 

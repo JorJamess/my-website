@@ -7,7 +7,7 @@ import { callService } from "../src/service/ipc.js";
 import { MemoryCredentialStore } from "../src/security/keychain.js";
 import { emptyState } from "../src/sync/state.js";
 import { silentLogger } from "../src/logging.js";
-import { loadConfig, saveConfig, validateConfig, ConfigError, type BridgeConfig } from "../src/config/config.js";
+import { loadConfig, saveConfig, validateConfig, ConfigError, NotSetUpError, type BridgeConfig } from "../src/config/config.js";
 import { redact } from "../src/logging.js";
 import { main, parseArgs } from "../src/cli/main.js";
 import { createPdfExtractor } from "../src/pdf/extract.js";
@@ -137,6 +137,13 @@ describe("config", () => {
     expect(Object.keys(await loadConfig(file))).not.toContain("token");
     await writeFile(file, "{ not json");
     await expect(loadConfig(file)).rejects.toThrow(/damaged/);
+    // missing means "not set up"; unreadable is a real fault
+    await expect(loadConfig(`${file}.nope`)).rejects.toBeInstanceOf(NotSetUpError);
+    const asDir = await mkdtemp(join(tmpdir(), "cfgdir-"));
+    cleanups.push(() => rm(asDir, { recursive: true, force: true }));
+    const err = await loadConfig(asDir).catch((e) => e);
+    expect(err).toBeInstanceOf(ConfigError);
+    expect(err).not.toBeInstanceOf(NotSetUpError);
   });
 });
 
@@ -287,6 +294,20 @@ describe("one Bridge at a time, and no restart loop", () => {
     await writeFile(join(b.home, "bridge.pid"), `${process.ppid}\n${await processStartTime(process.ppid)}`);
     await expect(make(b).start()).rejects.toThrow(AlreadyRunningError);
   });
+  it("a backup destination inside the vault is refused when the backups are used, not only at setup", async () => {
+    const v = await makeVault();
+    cleanups.push(v.cleanup);
+    const vol: VolumeProvider = { info: async () => ({ uuid: "u", mountPoint: "/", name: "x", encrypted: true }), findByUuid: async () => v.dir };
+    const m = new BackupManager({ vaultPath: v.dir, vaultName: "T", settings: { localPath: join(v.dir, "bk"), externalPath: null, externalVolumeUuid: "u", externalSubpath: "ext" }, volumes: vol, log: silentLogger });
+    const d = await m.destinations();
+    expect(d.every((x) => x.dir === null && /inside the vault/.test(x.reason ?? ""))).toBe(true);
+  });
+  it("a pid file without a start time, from an older version, still blocks while that process is alive", async () => {
+    const b = await baseOpts();
+    await writeFile(join(b.home, "bridge.pid"), String(process.ppid));
+    await expect(make(b).start()).rejects.toThrow(AlreadyRunningError);
+    expect(await readFile(join(b.home, "bridge.pid"), "utf8")).toBe(String(process.ppid)); // left alone
+  });
   it("a process id reused by an unrelated process (different start time) does not lock the Bridge out", async () => {
     const b = await baseOpts();
     await writeFile(join(b.home, "bridge.pid"), `${process.ppid}\nMon Jan  1 00:00:00 2001`);
@@ -336,6 +357,7 @@ describe("command line arguments", () => {
     expect(words).toEqual(["setup"]);
     expect(flags).toEqual({ url: "https://host.example/?tenant=a&x=1", vault: "/Users/me/Notes=old", yes: true, name: "My Mac", code: "AB=CD" });
     expect(parseArgs(["sync", "--allow-removals"]).flags["allow-removals"]).toBe(true);
+    expect(parseArgs(["sync", "--confirm-initial", "x"]).words).toEqual(["sync", "x"]);
     // a boolean flag does not swallow the word after it
     const a = parseArgs(["sync", "--allow-removals", "extra"]);
     expect(a.flags["allow-removals"]).toBe(true);

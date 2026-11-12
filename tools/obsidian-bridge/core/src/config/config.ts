@@ -110,8 +110,10 @@ export async function loadConfig(file = paths().config): Promise<BridgeConfig> {
   let text: string;
   try {
     text = await readFile(file, "utf8");
-  } catch {
-    throw new NotSetUpError("Not set up yet. Run: obsidian-bridge setup");
+  } catch (e) {
+    // only a missing file means "not set up"; an unreadable one is a real fault (exit non-zero so the login item retries)
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") throw new NotSetUpError("Not set up yet. Run: obsidian-bridge setup");
+    throw new ConfigError(`Config file can't be read: ${(e as Error).message}`);
   }
   try {
     return validateConfig(JSON.parse(text));

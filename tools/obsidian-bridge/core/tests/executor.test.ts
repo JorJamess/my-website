@@ -312,8 +312,21 @@ describe("placeholders for embeds that share a file name", () => {
     const out = patchBody(body, view.replace("two", "TWO"))!;
     expect(out).toBe("one ![[a/x.png|200]]\nTWO ![[b/x.png]]\nthree ![[b/x.png]]\n");
   });
-  it("a markdown image never swallows a line break", () => {
+  it("an image whose target is on the next line is still hidden, keeps the line count, and edits to that note are refused", () => {
     const body = "![alt](\nphoto.png)\nnext\n";
-    expect(renderForUpload(body).split("\n").length).toBe(body.split("\n").length);
+    const view = renderForUpload(body);
+    expect(view).not.toContain("photo.png)");
+    expect(view).toContain("[Image attachment: photo.png");
+    expect(view.split("\n").length).toBe(body.split("\n").length);
+    expect(patchBody(body, view.replace("next", "NEXT"))).toBeNull();
+  });
+  it("a file really named like a numbered placeholder does not collide", () => {
+    const body = "![[a/x.png]]\n![[b/x.png]]\n![[c/x.png (2).png]]\n";
+    const seen = new Map<string, string>();
+    renderForUpload(body, (ph, o) => {
+      expect(seen.has(ph) && seen.get(ph) !== o).toBe(false);
+      seen.set(ph, o);
+    });
+    expect(seen.size).toBe(3);
   });
 });

@@ -314,7 +314,7 @@ export async function syncVault(ctx: SyncContext): Promise<SyncReport> {
   const approved = new Set(state.removalApproved);
   const goneApproved = gone.filter((id) => approved.has(id));
   const goneOther = gone.filter((id) => !approved.has(id));
-  state.removalApproved = state.removalApproved.filter((id) => !protectedIds.has(id) && state.docs[id] !== undefined); // an approval is dropped only once the removal succeeded
+  state.removalApproved = state.removalApproved.filter((id) => !protectedIds.has(id) && state.docs[id] !== undefined && state.revoked[id] === undefined && state.docs[id].status !== "blocked_revoked"); // an approval is dropped only once the removal succeeded
   let toRemove = goneApproved;
   if (scan.counts.unreadable > 0 && goneOther.length) {
     report.errors.push("Some files could not be read, so nothing was removed from the cloud this time");

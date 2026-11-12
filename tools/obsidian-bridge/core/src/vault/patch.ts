@@ -47,6 +47,8 @@ export function patchBody(body: string, proposed: string): string | null {
     if (!pairs.has(ph)) pairs.set(ph, orig);
   }).split("\n");
   if (view.length !== original.length) return null;
+  // an embed written over several lines cannot be put back line by line: refuse rather than guess
+  if ([...pairs.values()].some((o) => o.includes("\n"))) return null;
   if (!view.join("\n").trim()) return proposed;
   const next = proposed.replace(/\r\n/g, "\n").split("\n");
   const ops = diffLines(view.map((l) => l.replace(/\r$/, "")), next);

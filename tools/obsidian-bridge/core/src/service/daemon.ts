@@ -205,7 +205,9 @@ export class BridgeService {
         // alive AND the same process that wrote the file: after a reboot the number may belong to something unrelated
         if (other && other !== process.pid && alive(other)) {
           const recorded = startParts.join("\n").trim();
-          if (recorded && (await processStartTime(other)) === recorded) throw new AlreadyRunningError();
+          const now = recorded ? await processStartTime(other) : "";
+          // only a process whose start time is known AND different is a stranger; when it can't be told, trust that it is a Bridge
+          if (!recorded || !now || now === recorded) throw new AlreadyRunningError();
         }
         await rm(f, { force: true }); // left behind by a process that is gone
       }

@@ -336,12 +336,12 @@ export async function main(argv: string[]): Promise<number> {
       case "doctor":
         return await doctor();
       case "sync": {
-        const live = await callService(paths().socket, flags["confirm-initial"] ? "confirm-initial-sync" : "sync", { allowRemovals: truthyFlag(flags["allow-removals"]) });
+        const live = await callService(paths().socket, truthyFlag(flags["confirm-initial"]) ? "confirm-initial-sync" : "sync", { allowRemovals: truthyFlag(flags["allow-removals"]) });
         if (live) {
           out(live.ok ? JSON.stringify(live.data, null, 2) : `Error: ${live.error}`);
           return live.ok ? 0 : 1;
         }
-        return await oneShotSync(flags["confirm-initial"] === true, truthyFlag(flags["allow-removals"]));
+        return await oneShotSync(truthyFlag(flags["confirm-initial"]), truthyFlag(flags["allow-removals"]));
       }
       case "pause":
       case "resume": {

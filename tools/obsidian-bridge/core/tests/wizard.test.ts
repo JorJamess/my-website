@@ -103,6 +103,7 @@ describe("setup wizard steps (used by the Menu Bar app)", () => {
 
 import { chmod } from "node:fs/promises";
 import { insideOrSame, pairAndSave, validateFolders } from "../src/cli/pairing.js";
+import { realish } from "../src/backup/paths.js";
 import { symlink } from "node:fs/promises";
 import { loadConfig, saveConfig, validateConfig } from "../src/config/config.js";
 import type { CredentialStore } from "../src/security/keychain.js";
@@ -188,6 +189,10 @@ describe("backup folder checks", () => {
     expect(insideOrSame("/v/sub", "/v")).toBe(true);
     expect(insideOrSame("/v2", "/v")).toBe(false);
     expect(insideOrSame("/other/x", "/v")).toBe(false);
+  });
+  it("keeps every character of a path directly under the root", async () => {
+    expect(await realish("/zz-no-such-dir-xyz")).toBe("/zz-no-such-dir-xyz");
+    expect(await realish("/zz-no-such-dir-xyz/a/b")).toBe("/zz-no-such-dir-xyz/a/b");
   });
   it("covers the external folder and follows symlinks into the vault", async () => {
     const v = await makeVault();

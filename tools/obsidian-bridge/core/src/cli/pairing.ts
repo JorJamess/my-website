@@ -1,11 +1,13 @@
 // The one place where a Mac gets paired and its config written. Setup, `pair` and the Menu Bar app's wizard all use it,
 // so they validate the same things and fail the same safe way.
-import { realpath } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { relative, resolve } from "node:path";
+import { insideOrSame, realish } from "../backup/paths.js";
 import { MacVolumes } from "../backup/volumes.js";
 import { BridgeClient, type FetchLike } from "../cloudflare/client.js";
 import { isVault, saveConfig, type BridgeConfig } from "../config/config.js";
 import type { CredentialStore } from "../security/keychain.js";
+
+export { insideOrSame };
 
 export type PairInput = {
   url: string;
@@ -18,22 +20,6 @@ export type PairInput = {
   allowUnencrypted: boolean;
   version: string;
 };
-
-export const insideOrSame = (child: string, parent: string) => {
-  const rel = relative(resolve(parent), resolve(child));
-  return !rel || (rel !== ".." && !rel.startsWith("../") && !isAbsolute(rel));
-};
-
-/** The real location of a path, following symlinks; a folder that does not exist yet is resolved through its nearest existing parent. */
-async function realish(p: string): Promise<string> {
-  const abs = resolve(p);
-  try {
-    return await realpath(abs);
-  } catch {
-    const parent = dirname(abs);
-    return parent === abs ? abs : join(await realish(parent), abs.slice(parent.length + 1));
-  }
-}
 
 /** Folder rules that protect the vault and the backups: a real vault, and backup folders (local and external) that are not inside it. */
 export async function validateFolders(vault: string, backup: string | null, external: string | null = null) {

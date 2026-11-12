@@ -420,6 +420,16 @@ describe("review fixes round two", () => {
     expect(r).toMatchObject({ removed: 15, removalBrake: false });
     expect(ctx.state.removalApproved).toEqual([]);
   });
+  it("an approval for a note that was revoked is dropped, so it cannot skip the brake after re-enabling", async () => {
+    const { v, api, ctx } = await setup();
+    await v.write("a.md", NOTE(ID(1), true, "hello"));
+    await syncVault(ctx);
+    ctx.state.removalApproved = [ID(1)];
+    ctx.state.revoked[ID(1)] = 1;
+    ctx.state.docs[ID(1)].status = "blocked_revoked";
+    await syncVault(ctx);
+    expect(ctx.state.removalApproved).toEqual([]);
+  });
   it("notes synced in the old chunk format are uploaded again once, then left alone", async () => {
     const { v, api, ctx } = await setup();
     await v.write("a.md", NOTE(ID(1), true, "hello"));

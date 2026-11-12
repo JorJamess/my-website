@@ -75,7 +75,7 @@ export function renderForUpload(markdown: string, collect?: (placeholder: string
     if (!originals.has(ph)) originals.set(ph, seen);
     let k = seen.indexOf(original);
     if (k < 0) k = seen.push(original) - 1;
-    const shown = k === 0 ? ph : ph.replace(" — not synchronized]", ` (${k + 1}) — not synchronized]`);
+    const shown = k === 0 ? ph : ph.replace(/\]$/, ` (${k + 1})]`);
     collect?.(shown, original);
     return shown;
   };
@@ -86,12 +86,14 @@ export function renderForUpload(markdown: string, collect?: (placeholder: string
       if (ATTACHMENT_EXT.has(ext)) return note(placeholder(basename(target.trim()), false), full);
       return full;
     });
-    out = out.replace(/!\[[^\]\n]*\]\([ \t]*(<[^>\n]+>|[^)\s]+)(?:[ \t]+"[^"\n]*")?[ \t]*\)/g, (full, raw: string) => {
+    out = out.replace(/!\[[^\]\n]*\]\(\s*(<[^>\n]+>|[^)\s]+)(?:\s+"[^"\n]*")?\s*\)/g, (full, raw: string) => {
       const t = cleanMdTarget(raw);
       if (isExternal(t)) return full;
       const ext = extOf(t);
-      if (IMAGE_EXT.has(ext)) return note(placeholder(basename(t), true), full);
-      if (ATTACHMENT_EXT.has(ext)) return note(placeholder(basename(t), false), full);
+      // the target may sit on another line: keep the line breaks after the placeholder so the line count never changes
+      const breaks = "\n".repeat(full.split("\n").length - 1);
+      if (IMAGE_EXT.has(ext)) return note(placeholder(basename(t), true), full) + breaks;
+      if (ATTACHMENT_EXT.has(ext)) return note(placeholder(basename(t), false), full) + breaks;
       return full;
     });
     return out;

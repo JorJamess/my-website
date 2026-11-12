@@ -1,6 +1,7 @@
 import { access, constants, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { Logger } from "../logging.js";
+import { insideOrSame, realish } from "./paths.js";
 import { cycleKeys, dueLabels, modeFor, type Label } from "./schedule.js";
 
 import { createSnapshot, listSnapshots, listSnapshotSummaries, pruneSnapshots, type SnapshotLabel, type SnapshotManifest } from "./store.js";
@@ -69,6 +70,8 @@ export class BackupManager {
 
   private async usable(name: "local" | "external", dir: string, root: string): Promise<Destination> {
     try {
+      // checked again here, not only at setup: the external folder is rebuilt from the drive's id and a subfolder
+      if (insideOrSame(await realish(root), await realish(this.o.vaultPath))) return { name, dir: null, reason: `The ${name} backup folder is inside the vault, so it is not used` };
       await access(root, constants.W_OK);
       await mkdir(join(dir, "snapshots"), { recursive: true });
       const info = await this.o.volumes.info(root);
