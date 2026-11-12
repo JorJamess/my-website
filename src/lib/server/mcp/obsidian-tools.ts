@@ -54,6 +54,8 @@ async function mustHaveShared(f: string) {
 const sameParent = (a: string, b: string) => parentOf(a).toLowerCase() === parentOf(b).toLowerCase();
 const sameName = (a: string, b: string) => nameOf(a).toLowerCase() === nameOf(b).toLowerCase();
 
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
 async function folderImpact(docs: SharedDoc[]) {
   const notes = docs.filter((d) => d.kind === "note");
   return { synced_notes: notes.length, synced_pdfs: docs.length - notes.length, synced_note_paths: notes.slice(0, 50).map((d) => d.path), more_synced_notes: Math.max(0, notes.length - 50) };
@@ -276,7 +278,7 @@ export const obsidianTools: Def[] = [
       if (!sameParent(a.path!, a.new_path!)) throw new repo.InputError("เปลี่ยนชื่อต้องอยู่ที่เดิม ถ้าจะย้ายใช้ propose_move_folder");
       if ((await sharedDocsUnder(a.new_path!, 1)).length) throw new repo.InputError("มีโฟลเดอร์ชื่อนี้อยู่แล้ว");
       const i = await folderImpact(docs);
-      return { payload: { path: a.path, new_path: a.new_path, impact: i }, summary: `Rename folder ${note(a.path!)} to ${note(nameOf(a.new_path!))} (${i.synced_notes} synced notes; local-only files move with it)` };
+      return { payload: { path: a.path, new_path: a.new_path, impact: i }, summary: `Rename folder ${note(a.path!)} to ${note(nameOf(a.new_path!))} (${plural(i.synced_notes, "synced note")}; local-only files move with it)` };
     },
   ),
   propose(
@@ -291,7 +293,7 @@ export const obsidianTools: Def[] = [
       if (a.new_path!.toLowerCase().startsWith(`${a.path!.toLowerCase()}/`)) throw new repo.InputError("ย้ายโฟลเดอร์เข้าไปในตัวเองไม่ได้");
       if ((await sharedDocsUnder(a.new_path!, 1)).length) throw new repo.InputError("มีโฟลเดอร์ชื่อนี้อยู่แล้วที่ปลายทาง");
       const i = await folderImpact(docs);
-      return { payload: { path: a.path, new_path: a.new_path, impact: i }, summary: `Move folder ${note(a.path!)} to ${note(parentOf(a.new_path!) || "(vault root)")} (${i.synced_notes} synced notes; local-only files move with it)` };
+      return { payload: { path: a.path, new_path: a.new_path, impact: i }, summary: `Move folder ${note(a.path!)} to ${note(parentOf(a.new_path!) || "(vault root)")} (${plural(i.synced_notes, "synced note")}; local-only files move with it)` };
     },
   ),
   propose(
@@ -304,7 +306,7 @@ export const obsidianTools: Def[] = [
       const i = await folderImpact(docs);
       return {
         payload: { path: a.path, impact: i },
-        summary: `Delete folder ${note(a.path!)}: ${i.synced_notes} synced notes and ${i.synced_pdfs} PDFs are affected. Everything else inside it, including files that are not shared, also goes to the Obsidian trash (your Mac counts those when it applies this)`,
+        summary: `Delete folder ${note(a.path!)}: ${plural(i.synced_notes, "synced note")} and ${plural(i.synced_pdfs, "PDF")} are affected. Everything else inside it, including files that are not shared, also goes to the Obsidian trash (your Mac counts those when it applies this)`,
       };
     },
   ),

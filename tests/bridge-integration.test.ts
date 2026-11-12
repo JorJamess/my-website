@@ -350,7 +350,7 @@ describe("Claude over MCP, start to finish", () => {
     const { svc } = await pairedService();
     await svc.syncNow();
     const prop = await mcp("propose_move_folder", { path: "Inbox/Java", new_path: "Programming/Java" });
-    expect(prop.summary).toMatch(/1 synced notes/);
+    expect(prop.summary).toMatch(/1 synced note;/);
     await approveLatest();
     await svc.pollOnce();
     expect(await readFile(join(dir, "Programming/Java/private.md"), "utf8")).toBe("local only, never shared");

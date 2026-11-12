@@ -145,6 +145,11 @@ describe("proposals", () => {
     expect((await call("propose_move_note", { path: "Programming/Java/Note 2.md", new_path: "Programming/Java/Note 2.md" })).isError).toBe(true);
     expect((await call("propose_move_note", { path: "Programming/Java/Note 2.md", new_path: "Archive/Note 2.md" })).data.summary).toBe('Move note “Programming/Java/Note 2.md” to folder “Archive”');
   });
+  it("a folder with exactly one shared note is described in the singular", async () => {
+    await upload("d", doc(1));
+    expect((await call("propose_rename_folder", { path: "Programming/Java", new_path: "Programming/Java Basics" })).data.summary).toMatch(/\(1 synced note; local-only/);
+    expect((await call("propose_delete_folder", { path: "Programming/Java" })).data.summary).toMatch(/1 synced note and 0 PDFs are affected/);
+  });
   it("folder operations show only shared items and never say anything about unshared files", async () => {
     await upload("d", doc(1));
     await upload("d", doc(2));
@@ -154,7 +159,7 @@ describe("proposals", () => {
     expect((await call("propose_delete_folder", { path: "Private" })).text).toMatch(/ไม่พบโน้ตที่ซิงก์ในโฟลเดอร์/);
     const del = await call("propose_delete_folder", { path: "Programming/Java" });
     expect(del.data.queued).toBe(true);
-    expect(del.data.summary).toMatch(/2 synced notes and 1 PDFs are affected/);
+    expect(del.data.summary).toMatch(/2 synced notes and 1 PDF are affected/);
     expect(del.data.summary).toMatch(/not shared/);
     const cmd = await env.DB.prepare("SELECT payload_enc FROM obsidian_commands").first<{ payload_enc: string }>();
     expect(cmd!.payload_enc).toBeTruthy();
