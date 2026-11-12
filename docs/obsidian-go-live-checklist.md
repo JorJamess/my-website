@@ -4,13 +4,13 @@
 
 ## A. ก่อน push (ฝั่ง Cloudflare)
 
-- [ ] **1. สำรองข้อมูล** — LifeOS → Settings → กด **Back up now** (migration ใหม่แก้ฐานข้อมูลจริง)
-- [ ] **2. รัน migration บน remote** — `npm run db:migrate:remote`
+- [x] **1. สำรองข้อมูล** — LifeOS → Settings → กด **Back up now** (migration ใหม่แก้ฐานข้อมูลจริง)
+- [x] **2. รัน migration บน remote** — `npm run db:migrate:remote`
   ไฟล์ `0013_obsidian_integration.sql` เพิ่มตารางใหม่อย่างเดียว ไม่แก้ของเดิม รันเสร็จให้เช็กว่าสถานะเป็นสำเร็จ
-- [ ] **3. ตั้งคีย์เข้ารหัส** — `wrangler secret put OBSIDIAN_PAYLOAD_KEY`
+- [x] **3. ตั้งคีย์เข้ารหัส** — `wrangler secret put OBSIDIAN_PAYLOAD_KEY`
   ใส่ค่า 32 ไบต์แบบ base64 สร้างด้วย `openssl rand -base64 32` แล้วเก็บสำเนาไว้ที่ปลอดภัย (ไม่ใส่ใน Git, Vault หรือแชต)
   ถ้าไม่ตั้ง: อ่านโน้ตได้ แต่ข้อเสนอแก้ของ Claude จะถูกปฏิเสธ
-- [ ] **4. เช็กโควตา Cloudflare** — ดูจำนวน request ต่อวันและการใช้ D1 ใน dashboard
+- [x] **4. เช็กโควตา Cloudflare** — ดูจำนวน request ต่อวันและการใช้ D1 ใน dashboard
   Bridge poll ทุก 15 วินาที เพิ่มราว 5,760 request ต่อวัน (~6% ของ 100,000 ที่ฟรี) ถ้าใกล้เต็ม ให้เพิ่มช่วง poll
 - [ ] **5. ตรวจโค้ดแล้ว push** — `git log 6c9268d..HEAD` (commit ทั้งหมดของงานนี้) แล้ว push ไป `main`
   Workers Builds จะ deploy เอง จุดย้อนกลับของโค้ดคือ tag `backup/before-obsidian-2026-11-11`
