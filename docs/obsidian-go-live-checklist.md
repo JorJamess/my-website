@@ -12,18 +12,18 @@
   ถ้าไม่ตั้ง: อ่านโน้ตได้ แต่ข้อเสนอแก้ของ Claude จะถูกปฏิเสธ
 - [x] **4. เช็กโควตา Cloudflare** — ดูจำนวน request ต่อวันและการใช้ D1 ใน dashboard
   Bridge poll ทุก 15 วินาที เพิ่มราว 5,760 request ต่อวัน (~6% ของ 100,000 ที่ฟรี) ถ้าใกล้เต็ม ให้เพิ่มช่วง poll
-- [ ] **5. ตรวจโค้ดแล้ว push** — `git log 6c9268d..HEAD` (commit ทั้งหมดของงานนี้) แล้ว push ไป `main`
+- [x] **5. ตรวจโค้ดแล้ว push** — `git log 6c9268d..HEAD` (commit ทั้งหมดของงานนี้) แล้ว push ไป `main`
   Workers Builds จะ deploy เอง จุดย้อนกลับของโค้ดคือ tag `backup/before-obsidian-2026-11-11`
 
 ## B. หลัง push (ฝั่ง Mac)
 
-- [ ] **6. สร้างและเปิดแอป** — รัน `tools/obsidian-bridge/scripts/build.sh` แล้ว `build-app.sh`
+- [x] **6. สร้างและเปิดแอป** — รัน `tools/obsidian-bridge/scripts/build.sh` แล้ว `build-app.sh`
   เปิดแอปครั้งแรกด้วยการคลิกขวา → Open (ยังไม่ได้ notarize)
-- [ ] **7. Setup Wizard** — จับคู่ด้วยโค้ดจาก LifeOS → Settings → Obsidian ดู preview การซิงก์ครั้งแรกให้ละเอียดก่อนกดยืนยัน
+- [x] **7. Setup Wizard** — จับคู่ด้วยโค้ดจาก LifeOS → Settings → Obsidian ดู preview การซิงก์ครั้งแรกให้ละเอียดก่อนกดยืนยัน
   ถ้า macOS ถามสิทธิ์ให้ Node เข้าถึงโฟลเดอร์ vault/backup ให้กดอนุญาต (ถ้าขึ้น "Operation not permitted" ให้ดูหัวข้อ Mac setup ในเอกสาร)
-- [ ] **8. ลองกับ 2–3 โน้ตก่อน** — ใส่ `lifeos_sync: true` เฉพาะโน้ตทดลอง แล้วลองให้ Claude (เว็บและมือถือ) ค้นและอ่าน
+- [x] **8. ลองกับ 2–3 โน้ตก่อน** — ใส่ `lifeos_sync: true` เฉพาะโน้ตทดลอง แล้วลองให้ Claude (เว็บและมือถือ) ค้นและอ่าน
   เช็กว่าโน้ตอื่นที่ไม่ได้ใส่ flag ไม่โผล่
-- [ ] **9. เช็ก backup บน Mac** — ในแอปหรือ `obsidian-bridge status` ต้องเห็นผล backup local สำเร็จ (และ external ถ้าตั้งไว้) ก่อนอนุมัติการแก้/ลบใดๆ
+- [x] **9. เช็ก backup บน Mac** — ในแอปหรือ `obsidian-bridge status` ต้องเห็นผล backup local สำเร็จ (และ external ถ้าตั้งไว้) ก่อนอนุมัติการแก้/ลบใดๆ
 
 ## C. เปิดฟีเจอร์ propose ทีหลัง (ไม่บังคับ)
 
