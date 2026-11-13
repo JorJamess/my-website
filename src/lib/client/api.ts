@@ -7,6 +7,21 @@ import type { CalendarEvent, Category, EventColor, GoalDetail, GoalOverview, Hab
 import type { MoneyCalendar, MoneySummary, MoneyTransaction } from "@/lib/money-types";
 import type { EventCreateInput, EventUpdateInput, NoteCreateInput, NoteUpdateInput, NoteLinkInput, TodoCreateInput, TodoUpdateInput, HabitCreateInput, HabitUpdateInput, CheckinInput, GoalCreateInput, GoalUpdateInput, MilestoneCreateInput, MilestoneUpdateInput, GoalLinkInput } from "@/lib/schemas";
 
+export type LibraryStatus = { configured: boolean; connected: boolean; folderId: string | null; folderName: string | null };
+export type LibraryItem = {
+  id: string;
+  name: string;
+  kind: "folder" | "image" | "video" | "pdf" | "other";
+  mime: string;
+  size: number | null;
+  modified: string;
+  hasThumb: boolean;
+  duration: number | null;
+  width: number | null;
+  height: number | null;
+};
+export type LibraryList = { items: LibraryItem[]; nextPageToken: string | null; folder: { id: string; name: string; isRoot: boolean; parent: string | null } };
+
 export const UNAUTHORIZED_EVENT = "mw:unauthorized";
 export const DATA_CHANGED_EVENT = "mw:data-changed";
 
@@ -90,6 +105,10 @@ export const api = {
     return request<SearchAllResult>(`/api/search/all?${p}`);
   },
 
+  libraryStatus: () => request<LibraryStatus>("/api/library/status"),
+  libraryItems: (folder?: string, page?: string) =>
+    request<LibraryList>(`/api/library/items?${new URLSearchParams({ ...(folder ? { folder } : {}), ...(page ? { page } : {}) })}`),
+  libraryDisconnect: () => request<{ ok: true }>("/api/library/disconnect", json("POST")),
   approvals: () => request<{ pending: PendingAction[]; audit: AuditEntry[] }>("/api/approvals"),
   approvalCount: () => request<{ count: number }>("/api/approvals/count").then((r) => r.count),
   decideApproval: (id: string, decision: "approve" | "reject") => request<{ action: PendingAction }>(`/api/approvals/${id}`, json("POST", { decision })).then((r) => r.action),

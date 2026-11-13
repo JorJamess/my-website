@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { ArrowLeft, CalendarDays, ChartColumn, Wallet, Ellipsis, LayoutGrid, Sprout, Target, ListChecks, Loader2, LogOut, Moon, NotebookPen, Plug, Search, ShieldCheck, Settings, Sun } from "lucide-react";
+import { ArrowLeft, CalendarDays, ChartColumn, Wallet, Ellipsis, LayoutGrid, Sprout, Target, Images, ListChecks, Loader2, LogOut, Moon, NotebookPen, Plug, Search, ShieldCheck, Settings, Sun } from "lucide-react";
 import { useData } from "@/lib/client/use-data";
 import { api, UNAUTHORIZED_EVENT } from "@/lib/client/api";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,7 @@ const NAV = [
   { href: "/app/insights", label: "Insights", icon: ChartColumn },
   { href: "/app/money", label: "Money", icon: Wallet },
   { href: "/app/notes", label: "Notes", icon: NotebookPen },
+  { href: "/app/library", label: "Library", icon: Images },
   { href: "/app/connect", label: "Claude", icon: Plug },
   { href: "/app/approvals", label: "Approvals", icon: ShieldCheck },
 ] as const;

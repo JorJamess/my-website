@@ -9,6 +9,8 @@ interface __BaseEnv_CloudflareEnv {
 	SESSION_SECRET: string;
 	MCP_TOKEN: string;
 	INTEGRATION_KEY: string;
+	GOOGLE_CLIENT_ID: string;
+	GOOGLE_CLIENT_SECRET: string;
 	MONEY_API_URL: string;
 	WORKER_SELF_REFERENCE: Service<typeof import("./custom-worker").default>;
 	MONEY: Fetcher /* money-tracker */;

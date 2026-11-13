@@ -29,5 +29,7 @@
     // ทุกวันอาทิตย์ 20:00 UTC = วันจันทร์ 03:00 เวลาไทย
     "crons": ["0 20 * * SUN"]
   },
+  // Google OAuth client (ไม่ใช่ความลับ) — ส่วน GOOGLE_CLIENT_SECRET ตั้งด้วย wrangler secret put
+  "vars": { "GOOGLE_CLIENT_ID": "676420217834-pdbqn5n87mhjaoom5aevseb6rvkk4gde.apps.googleusercontent.com" },
   "observability": { "enabled": true }
 }
