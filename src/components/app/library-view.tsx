@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronRight, FileText, Folder, Loader2, LayoutGrid, List, Play, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, ExternalLink, FileText, Folder, Loader2, LayoutGrid, List, Play, Search, X, ZoomIn, ZoomOut } from "lucide-react";
 import { toast } from "sonner";
 import { api, type LibraryItem, type LibraryList } from "@/lib/client/api";
 import { useData } from "@/lib/client/use-data";
@@ -39,6 +39,32 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
+function monthLabel(iso: string) {
+  return new Date(iso).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+}
+
+function FolderCard({ folder, onOpen }: { folder: LibraryItem; onOpen: () => void }) {
+  const [noCover, setNoCover] = useState(false);
+  return (
+    <button onClick={onOpen} className="group overflow-hidden rounded-lg border bg-card text-left transition hover:-translate-y-0.5">
+      <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
+        {!noCover ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={`/api/library/cover/${folder.id}?s=360`} alt="" loading="lazy" onError={() => setNoCover(true)} className="size-full object-cover transition group-hover:scale-[1.04]" />
+        ) : (
+          <div className="grid size-full place-items-center text-muted-foreground">
+            <Folder className="size-9" />
+          </div>
+        )}
+        <span className="absolute left-2 top-2 grid size-7 place-items-center rounded-md bg-black/55 text-white">
+          <Folder className="size-4" />
+        </span>
+      </div>
+      <b className="block truncate px-3 py-2.5 text-[14px] font-medium">{folder.name}</b>
+    </button>
+  );
+}
+
 function Thumb({ item, className }: { item: LibraryItem; className?: string }) {
   const [failed, setFailed] = useState(false);
   if (!item.hasThumb || failed)
@@ -64,6 +90,8 @@ export function LibraryView() {
   // extra pages are tied to the page they were loaded after, so they reset themselves when the folder changes
   const [paged, setPaged] = useState<{ base: LibraryList | null; items: LibraryItem[]; next: string | null }>({ base: null, items: [], next: null });
   const [more, setMore] = useState(false);
+  const [zoomId, setZoomId] = useState<string | null>(null);
+  const strip = useRef<HTMLDivElement>(null);
 
   const status = useData(() => api.libraryStatus(), []);
   const connected = status.data?.connected && !!status.data.folderId;
@@ -83,6 +111,17 @@ export function LibraryView() {
   const folders = all.filter((i) => i.kind === "folder");
   const files = all.filter((i) => i.kind !== "folder" && i.kind !== "other" && (kind === "all" || i.kind === kind) && (!q.trim() || i.name.toLowerCase().includes(q.trim().toLowerCase())));
   const shownFolders = folders.filter((f) => !q.trim() || f.name.toLowerCase().includes(q.trim().toLowerCase()));
+
+  const groups = useMemo(() => {
+    const out: { label: string; items: { it: LibraryItem; i: number }[] }[] = [];
+    files.forEach((it, i) => {
+      const label = monthLabel(it.modified);
+      const last = out[out.length - 1];
+      if (last && last.label === label) last.items.push({ it, i });
+      else out.push({ label, items: [{ it, i }] });
+    });
+    return out;
+  }, [files]);
 
   const loadMore = useCallback(async () => {
     if (!next) return;
@@ -121,6 +160,11 @@ export function LibraryView() {
   }, [open, files.length]);
 
   const current = open != null ? files[open] : null;
+  const zoomed = !!current && current.kind === "image" && zoomId === current.id;
+
+  useEffect(() => {
+    strip.current?.querySelector<HTMLElement>('[data-current="true"]')?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+  }, [open]);
 
   if (status.loading && !status.data) return <div className="h-40 animate-pulse rounded-lg bg-muted" />;
 
@@ -198,47 +242,51 @@ export function LibraryView() {
       ) : (
         <>
           {shownFolders.length > 0 && (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3">
               {shownFolders.map((f) => (
-                <button key={f.id} onClick={() => setFolder(f.id)} className="rounded-lg border bg-card p-3.5 text-left transition hover:-translate-y-0.5">
-                  <Folder className="mb-2 size-7 text-muted-foreground" />
-                  <b className="block truncate text-[14px] font-medium">{f.name}</b>
-                </button>
+                <FolderCard key={f.id} folder={f} onOpen={() => setFolder(f.id)} />
               ))}
             </div>
           )}
 
-          {view === "grid" ? (
-            <div className="columns-[190px] gap-3.5">
-              {files.map((it, i) => (
-                <button key={it.id} onClick={() => setOpen(i)} className="group relative mb-3.5 block w-full break-inside-avoid overflow-hidden rounded-lg border bg-card text-left">
-                  <Thumb item={it} className="transition group-hover:scale-[1.02]" />
-                  {it.kind === "video" && (
-                    <>
-                      <span className="absolute left-1/2 top-[calc(50%-14px)] grid size-10 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white">
-                        <Play className="size-4 fill-current" />
+          {groups.map((g) => (
+            <section key={g.label} className="space-y-3">
+              <h2 className="pt-2 text-[13px] font-medium uppercase tracking-wide text-muted-foreground">{g.label}</h2>
+              {view === "grid" ? (
+                <div className="columns-[190px] gap-3.5">
+                  {g.items.map(({ it, i }) => (
+                    <button key={it.id} onClick={() => setOpen(i)} className="group relative mb-3.5 block w-full break-inside-avoid overflow-hidden rounded-lg border bg-card text-left">
+                      <Thumb item={it} className="transition group-hover:scale-[1.02]" />
+                      {it.kind === "video" && (
+                        <>
+                          <span className="absolute left-1/2 top-[calc(50%-14px)] grid size-10 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white">
+                            <Play className="size-4 fill-current" />
+                          </span>
+                          {it.duration != null && <span className="absolute right-2 top-2 rounded bg-black/65 px-1.5 text-[11px] text-white">{fmtDur(it.duration)}</span>}
+                        </>
+                      )}
+                      <div className="flex justify-between gap-2 px-3 py-2 text-[12.5px] text-muted-foreground">
+                        <span className="truncate text-foreground">{it.name}</span>
+                        <span className="shrink-0">{fmtDate(it.modified)}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {g.items.map(({ it, i }) => (
+                    <button key={it.id} onClick={() => setOpen(i)} className="flex w-full items-center gap-3 rounded-lg border bg-card p-2 text-left">
+                      <Thumb item={it} className="size-12 rounded-md" />
+                      <span className="min-w-0 flex-1 truncate text-[14px]">{it.name}</span>
+                      <span className="shrink-0 text-[12.5px] text-muted-foreground">
+                        {it.kind === "video" ? fmtDur(it.duration) : fmtSize(it.size)} · {fmtDate(it.modified)}
                       </span>
-                      {it.duration != null && <span className="absolute right-2 top-2 rounded bg-black/65 px-1.5 text-[11px] text-white">{fmtDur(it.duration)}</span>}
-                    </>
-                  )}
-                  <div className="flex justify-between gap-2 px-3 py-2 text-[12.5px] text-muted-foreground">
-                    <span className="truncate text-foreground">{it.name}</span>
-                    <span className="shrink-0">{fmtDate(it.modified)}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {files.map((it, i) => (
-                <button key={it.id} onClick={() => setOpen(i)} className="flex w-full items-center gap-3 rounded-lg border bg-card p-2 text-left">
-                  <Thumb item={it} className="size-12 rounded-md" />
-                  <span className="min-w-0 flex-1 truncate text-[14px]">{it.name}</span>
-                  <span className="shrink-0 text-[12.5px] text-muted-foreground">{it.kind === "video" ? fmtDur(it.duration) : fmtSize(it.size)} · {fmtDate(it.modified)}</span>
-                </button>
-              ))}
-            </div>
-          )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          ))}
 
           {files.length === 0 && shownFolders.length === 0 && <p className="py-8 text-center text-[14px] text-muted-foreground">Nothing here{q || kind !== "all" ? " matches" : " yet"}.</p>}
           {next && (
@@ -252,34 +300,69 @@ export function LibraryView() {
       )}
 
       {current && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/90 p-4" onClick={(e) => e.target === e.currentTarget && setOpen(null)}>
-          <button aria-label="Close" className="absolute right-4 top-4 rounded-lg bg-white/15 p-2 text-white" onClick={() => setOpen(null)}>
-            <X className="size-5" />
-          </button>
-          <div className="flex max-h-[78vh] w-full max-w-5xl items-center justify-center">
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/92" onClick={(e) => e.target === e.currentTarget && setOpen(null)}>
+          <div className="flex items-center gap-2 p-3 text-white">
+            <div className="min-w-0 flex-1 px-1">
+              <p className="truncate text-[14px] font-medium">{current.name}</p>
+              <p className="text-[12.5px] text-white/70">
+                {fmtDate(current.modified)}
+                {current.size ? ` · ${fmtSize(current.size)}` : ""} · {open! + 1}/{files.length}
+              </p>
+            </div>
+            {current.kind === "image" && (
+              <button aria-label={zoomed ? "Zoom out" : "Zoom in"} title={zoomed ? "Zoom out" : "Zoom in"} className="rounded-lg bg-white/15 p-2 hover:bg-white/25" onClick={() => setZoomId(zoomed ? null : current.id)}>
+                {zoomed ? <ZoomOut className="size-5" /> : <ZoomIn className="size-5" />}
+              </button>
+            )}
+            <a aria-label="Download" title="Download" className="rounded-lg bg-white/15 p-2 hover:bg-white/25" href={`/api/library/file/${current.id}?download=1&n=${encodeURIComponent(current.name)}`}>
+              <Download className="size-5" />
+            </a>
+            {current.link && (
+              <a aria-label="Open in Google Drive" title="Open in Google Drive" className="rounded-lg bg-white/15 p-2 hover:bg-white/25" href={current.link} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="size-5" />
+              </a>
+            )}
+            <button aria-label="Close" title="Close" className="rounded-lg bg-white/15 p-2 hover:bg-white/25" onClick={() => setOpen(null)}>
+              <X className="size-5" />
+            </button>
+          </div>
+
+          <div className={cn("relative flex min-h-0 flex-1 justify-center px-4", zoomed ? "items-start overflow-auto" : "items-center")} onClick={(e) => e.target === e.currentTarget && setOpen(null)}>
             {current.kind === "video" ? (
-              <video key={current.id} src={`/api/library/file/${current.id}`} controls autoPlay playsInline className="max-h-[78vh] max-w-full rounded-lg bg-black" />
+              <video key={current.id} src={`/api/library/file/${current.id}`} controls autoPlay playsInline className="max-h-full max-w-full rounded-lg bg-black" />
             ) : current.kind === "pdf" ? (
-              <iframe key={current.id} src={`/api/library/file/${current.id}`} title={current.name} className="h-[78vh] w-full rounded-lg bg-white" />
+              <iframe key={current.id} src={`/api/library/file/${current.id}`} title={current.name} className="h-full w-full max-w-5xl rounded-lg bg-white" />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
-              <img key={current.id} src={`/api/library/file/${current.id}`} alt={current.name} className="max-h-[78vh] max-w-full rounded-lg object-contain" />
+              <img
+                key={current.id}
+                src={`/api/library/file/${current.id}`}
+                alt={current.name}
+                onClick={() => setZoomId(zoomed ? null : current.id)}
+                className={cn("rounded-lg", zoomed ? "max-w-none cursor-zoom-out" : "max-h-full max-w-full cursor-zoom-in object-contain")}
+                style={zoomed && current.width ? { width: Math.min(current.width, 2400) } : undefined}
+              />
+            )}
+            {open! > 0 && (
+              <button aria-label="Previous" className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/15 p-2 text-white hover:bg-white/25" onClick={() => setOpen(open! - 1)}>
+                <ChevronLeft className="size-6" />
+              </button>
+            )}
+            {open! < files.length - 1 && (
+              <button aria-label="Next" className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/15 p-2 text-white hover:bg-white/25" onClick={() => setOpen(open! + 1)}>
+                <ChevronRight className="size-6" />
+              </button>
             )}
           </div>
-          {open! > 0 && (
-            <button aria-label="Previous" className="absolute left-3 top-1/2 rounded-full bg-white/15 p-2 text-white" onClick={() => setOpen(open! - 1)}>
-              <ChevronLeft className="size-6" />
-            </button>
-          )}
-          {open! < files.length - 1 && (
-            <button aria-label="Next" className="absolute right-3 top-1/2 rounded-full bg-white/15 p-2 text-white" onClick={() => setOpen(open! + 1)}>
-              <ChevronRight className="size-6" />
-            </button>
-          )}
-          <p className="text-center text-[13px] text-white/80">
-            {current.name} · {fmtDate(current.modified)}
-            {current.size ? ` · ${fmtSize(current.size)}` : ""} · {open! + 1}/{files.length}
-          </p>
+
+          <div ref={strip} className="flex gap-2 overflow-x-auto p-3">
+            {files.map((f, i) => (
+              <button key={f.id} data-current={i === open} onClick={() => setOpen(i)} aria-label={f.name} className={cn("relative size-14 shrink-0 overflow-hidden rounded-md border-2 border-transparent opacity-60 hover:opacity-100", i === open && "border-white opacity-100")}>
+                <Thumb item={f} className="size-full" />
+                {f.kind === "video" && <Play className="absolute left-1/2 top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 fill-white text-white" />}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>

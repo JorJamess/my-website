@@ -165,6 +165,7 @@ export type DriveItem = {
   size: number | null;
   modified: string;
   hasThumb: boolean;
+  link: string | null;
   duration: number | null;
   width: number | null;
   height: number | null;
@@ -204,7 +205,7 @@ export async function listFolder(folderId: string, root: string, pageToken?: str
   if (!(await isInsideRoot(folderId, root))) throw new DriveError("outside_library", 403);
   const res = await driveGet("/files", {
     q: `'${folderId}' in parents and trashed = false`,
-    fields: "nextPageToken,files(id,name,mimeType,size,modifiedTime,thumbnailLink,videoMediaMetadata(durationMillis,width,height),imageMediaMetadata(width,height))",
+    fields: "nextPageToken,files(id,name,mimeType,size,modifiedTime,thumbnailLink,webViewLink,videoMediaMetadata(durationMillis,width,height),imageMediaMetadata(width,height))",
     orderBy: "modifiedTime desc",
     pageSize: "100",
     ...(pageToken ? { pageToken } : {}),
@@ -212,7 +213,7 @@ export async function listFolder(folderId: string, root: string, pageToken?: str
   if (!res.ok) throw new DriveError("drive_list_failed");
   const d = (await res.json()) as {
     nextPageToken?: string;
-    files?: { id: string; name: string; mimeType: string; size?: string; modifiedTime: string; thumbnailLink?: string; videoMediaMetadata?: { durationMillis?: string; width?: number; height?: number }; imageMediaMetadata?: { width?: number; height?: number } }[];
+    files?: { id: string; name: string; mimeType: string; size?: string; modifiedTime: string; thumbnailLink?: string; webViewLink?: string; videoMediaMetadata?: { durationMillis?: string; width?: number; height?: number }; imageMediaMetadata?: { width?: number; height?: number } }[];
   };
   const items: DriveItem[] = (d.files ?? []).map((f) => ({
     id: f.id,
@@ -222,6 +223,7 @@ export async function listFolder(folderId: string, root: string, pageToken?: str
     size: f.size ? Number(f.size) : null,
     modified: f.modifiedTime,
     hasThumb: !!f.thumbnailLink,
+    link: f.webViewLink?.startsWith("https://") ? f.webViewLink : null,
     duration: f.videoMediaMetadata?.durationMillis ? Math.round(Number(f.videoMediaMetadata.durationMillis) / 1000) : null,
     width: f.videoMediaMetadata?.width ?? f.imageMediaMetadata?.width ?? null,
     height: f.videoMediaMetadata?.height ?? f.imageMediaMetadata?.height ?? null,
@@ -234,6 +236,20 @@ export async function folderInfo(folderId: string, root: string) {
   const res = await driveGet(`/files/${folderId}`, { fields: "id,name,parents,mimeType" });
   if (!res.ok) throw new DriveError("drive_get_failed");
   return (await res.json()) as { id: string; name: string; parents?: string[]; mimeType: string };
+}
+
+/** The newest photo or video directly inside a folder, used as the folder's cover. */
+export async function findCover(folderId: string, root: string): Promise<string | null> {
+  if (!(await isInsideRoot(folderId, root))) throw new DriveError("outside_library", 403);
+  const res = await driveGet("/files", {
+    q: `'${folderId}' in parents and trashed = false and (mimeType contains 'image/' or mimeType contains 'video/')`,
+    fields: "files(id,thumbnailLink)",
+    orderBy: "modifiedTime desc",
+    pageSize: "5",
+  });
+  if (!res.ok) return null;
+  const d = (await res.json()) as { files?: { id: string; thumbnailLink?: string }[] };
+  return d.files?.find((f) => f.thumbnailLink)?.id ?? null;
 }
 
 /** Small preview made by Drive. The access token never leaves the server. */

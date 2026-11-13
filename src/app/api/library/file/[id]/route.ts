@@ -17,6 +17,11 @@ export const GET = api<Ctx>(async (req, { params }) => {
   }
   h.set("Cache-Control", "private, max-age=3600");
   h.set("X-Content-Type-Options", "nosniff");
-  h.set("Content-Disposition", "inline");
+  const u = new URL(req.url);
+  if (u.searchParams.get("download")) {
+    // sanitized: the name only ever goes into this one header
+    const name = (u.searchParams.get("n") ?? "file").replace(/[\x00-\x1f\x7f"\\/]/g, "_").slice(0, 150) || "file";
+    h.set("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
+  } else h.set("Content-Disposition", "inline");
   return new Response(res.body, { status: res.status, headers: h });
 });

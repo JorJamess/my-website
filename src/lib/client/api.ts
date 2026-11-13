@@ -16,6 +16,7 @@ export type LibraryItem = {
   size: number | null;
   modified: string;
   hasThumb: boolean;
+  link: string | null;
   duration: number | null;
   width: number | null;
   height: number | null;
