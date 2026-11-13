@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronRight, Download, ExternalLink, FileText, Folder, Loader2, LayoutGrid, List, Play, Search, X, ZoomIn, ZoomOut } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, ExternalLink, FileText, Folder, Loader2, LayoutGrid, List, Play, Search, X, ZoomIn, ZoomOut } from "lucide-react";
 import { toast } from "sonner";
 import { api, type LibraryItem, type LibraryList } from "@/lib/client/api";
 import { useData } from "@/lib/client/use-data";
@@ -43,14 +43,34 @@ function monthLabel(iso: string) {
   return new Date(iso).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 }
 
+// Folder listings are remembered for the session: opening a folder you've seen is instant, and it refreshes quietly behind the scenes.
+const listCache = new Map<string, LibraryList>();
+const inflight = new Map<string, Promise<LibraryList>>();
+const listKey = (folder?: string) => folder ?? "root";
+function fetchList(folder?: string): Promise<LibraryList> {
+  const key = listKey(folder);
+  const running = inflight.get(key);
+  if (running) return running;
+  const p = api
+    .libraryItems(folder)
+    .then((r) => {
+      listCache.set(key, r);
+      return r;
+    })
+    .finally(() => inflight.delete(key));
+  inflight.set(key, p);
+  return p;
+}
+
 function FolderCard({ folder, onOpen }: { folder: LibraryItem; onOpen: () => void }) {
   const [noCover, setNoCover] = useState(false);
+  const warm = () => void fetchList(folder.id).catch(() => {});
   return (
-    <button onClick={onOpen} className="group overflow-hidden rounded-lg border bg-card text-left transition hover:-translate-y-0.5">
+    <button onClick={onOpen} onMouseEnter={warm} onTouchStart={warm} onFocus={warm} className="group overflow-hidden rounded-lg border bg-card text-left">
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
         {!noCover ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={`/api/library/cover/${folder.id}?s=360`} alt="" loading="lazy" onError={() => setNoCover(true)} className="size-full object-cover transition group-hover:scale-[1.04]" />
+          <img src={`/api/library/cover/${folder.id}?s=320`} alt="" loading="lazy" decoding="async" onError={() => setNoCover(true)} className="size-full object-cover" />
         ) : (
           <div className="grid size-full place-items-center text-muted-foreground">
             <Folder className="size-9" />
@@ -65,24 +85,24 @@ function FolderCard({ folder, onOpen }: { folder: LibraryItem; onOpen: () => voi
   );
 }
 
-function Thumb({ item, className }: { item: LibraryItem; className?: string }) {
+function Thumb({ item, className, size = 320 }: { item: LibraryItem; className?: string; size?: number }) {
   const [failed, setFailed] = useState(false);
   if (!item.hasThumb || failed)
     return (
-      <div className={cn("grid place-items-center bg-muted text-muted-foreground", className)} style={{ aspectRatio: "4 / 3" }}>
-        {item.kind === "pdf" ? <FileText className="size-8" /> : <Folder className="size-8" />}
+      <div className={cn("grid aspect-square place-items-center bg-muted text-muted-foreground", className)}>
+        <FileText className="size-7" />
       </div>
     );
-  const ratio = item.width && item.height ? `${item.width} / ${item.height}` : "4 / 3";
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={`/api/library/thumb/${item.id}?s=480`} alt={item.name} loading="lazy" onError={() => setFailed(true)} className={cn("w-full bg-muted object-cover", className)} style={{ aspectRatio: ratio }} />
+    <img src={`/api/library/thumb/${item.id}?s=${size}`} alt={item.name} loading="lazy" decoding="async" onError={() => setFailed(true)} className={cn("aspect-square bg-muted object-cover", className)} />
   );
 }
 
 export function LibraryView() {
   const params = useSearchParams();
-  const [folder, setFolder] = useState<string | undefined>(undefined);
+  const [path, setPath] = useState<{ id: string; name: string }[]>([]);
+  const folder = path.length ? path[path.length - 1].id : undefined;
   const [kind, setKind] = useState<(typeof KINDS)[number][0]>("all");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [q, setQ] = useState("");
@@ -95,7 +115,34 @@ export function LibraryView() {
 
   const status = useData(() => api.libraryStatus(), []);
   const connected = status.data?.connected && !!status.data.folderId;
-  const list = useData<LibraryList | null>(() => (connected ? api.libraryItems(folder) : Promise.resolve(null)), [connected, folder]);
+  const key = listKey(folder);
+  const [fetched, setFetched] = useState<Record<string, LibraryList | { error: string }>>({});
+  const entry = fetched[key] ?? listCache.get(key);
+  const list = { data: entry && "items" in entry ? entry : null, error: entry && "error" in entry ? entry.error : null, loading: !entry };
+
+  useEffect(() => {
+    if (!connected) return;
+    let live = true;
+    fetchList(folder).then(
+      (r) => live && setFetched((f) => ({ ...f, [key]: r })),
+      (e) => live && !listCache.has(key) && setFetched((f) => ({ ...f, [key]: { error: e instanceof Error ? e.message : String(e) } })),
+    );
+    return () => {
+      live = false;
+    };
+  }, [connected, folder, key]);
+
+  function enter(id: string, name: string) {
+    setPath((p) => [...p, { id, name }]);
+    setQ("");
+    setOpen(null);
+    window.scrollTo({ top: 0 });
+  }
+  function goTo(depth: number) {
+    setPath((p) => p.slice(0, depth));
+    setQ("");
+    window.scrollTo({ top: 0 });
+  }
 
   const samePage = paged.base === list.data;
   const extra = useMemo(() => (samePage ? paged.items : []), [samePage, paged.items]);
@@ -140,6 +187,9 @@ export function LibraryView() {
     if (!confirm("Disconnect Google Drive? Your files in Drive are not touched.")) return;
     try {
       await api.libraryDisconnect();
+      listCache.clear();
+      setFetched({});
+      setPath([]);
       toast.success("Disconnected");
       status.reload();
     } catch (e) {
@@ -161,6 +211,13 @@ export function LibraryView() {
 
   const current = open != null ? files[open] : null;
   const zoomed = !!current && current.kind === "image" && zoomId === current.id;
+
+  // warm up the neighbours so arrow-key browsing feels instant
+  useEffect(() => {
+    if (open == null) return;
+    for (const n of [files[open + 1], files[open - 1]]) if (n?.kind === "image") new Image().src = `/api/library/thumb/${n.id}?s=1600`;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   useEffect(() => {
     strip.current?.querySelector<HTMLElement>('[data-current="true"]')?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
@@ -193,16 +250,23 @@ export function LibraryView() {
   return (
     <div className="space-y-5">
       <div>
-        <div className="flex flex-wrap items-center gap-x-2 text-[13px] text-muted-foreground">
-          <button className="underline-offset-2 hover:underline" onClick={() => setFolder(undefined)}>
+        <div className="flex flex-wrap items-center gap-x-1.5 text-[13px] text-muted-foreground">
+          {path.length > 0 && (
+            <button aria-label="Back" className="mr-1 grid size-6 place-items-center rounded-md hover:bg-muted" onClick={() => goTo(path.length - 1)}>
+              <ArrowLeft className="size-4" />
+            </button>
+          )}
+          <button className={cn("underline-offset-2 hover:underline", path.length === 0 && "text-foreground")} onClick={() => goTo(0)}>
             {status.data?.folderName ?? "Memories"}
           </button>
-          {list.data && !list.data.folder.isRoot && (
-            <>
+          {path.map((p, i) => (
+            <span key={p.id} className="flex items-center gap-1.5">
               <ChevronRight className="size-3.5" />
-              <span className="text-foreground">{list.data.folder.name}</span>
-            </>
-          )}
+              <button className={cn("underline-offset-2 hover:underline", i === path.length - 1 && "text-foreground")} onClick={() => goTo(i + 1)}>
+                {p.name}
+              </button>
+            </span>
+          ))}
         </div>
         <h1 className="text-[26px] font-medium tracking-tight">Library</h1>
         <p className="mt-1 flex items-center gap-2 text-[13.5px] text-muted-foreground">
@@ -238,13 +302,17 @@ export function LibraryView() {
       {list.error && <p className="text-sm text-destructive">{list.error === "reconnect_needed" ? "Google access expired. Disconnect and connect again." : `Couldn't load Drive (${list.error})`}</p>}
 
       {list.loading && !list.data ? (
-        <div className="h-40 animate-pulse rounded-lg bg-muted" />
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2">
+          {Array.from({ length: 12 }, (_, n) => (
+            <div key={n} className="aspect-square animate-pulse rounded-lg bg-muted" />
+          ))}
+        </div>
       ) : (
         <>
           {shownFolders.length > 0 && (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3">
               {shownFolders.map((f) => (
-                <FolderCard key={f.id} folder={f} onOpen={() => setFolder(f.id)} />
+                <FolderCard key={f.id} folder={f} onOpen={() => enter(f.id, f.name)} />
               ))}
             </div>
           )}
@@ -253,22 +321,19 @@ export function LibraryView() {
             <section key={g.label} className="space-y-3">
               <h2 className="pt-2 text-[13px] font-medium uppercase tracking-wide text-muted-foreground">{g.label}</h2>
               {view === "grid" ? (
-                <div className="columns-[190px] gap-3.5">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2">
                   {g.items.map(({ it, i }) => (
-                    <button key={it.id} onClick={() => setOpen(i)} className="group relative mb-3.5 block w-full break-inside-avoid overflow-hidden rounded-lg border bg-card text-left">
-                      <Thumb item={it} className="transition group-hover:scale-[1.02]" />
+                    <button key={it.id} onClick={() => setOpen(i)} title={it.name} className="group relative block aspect-square w-full overflow-hidden rounded-lg bg-muted">
+                      <Thumb item={it} size={360} className="size-full" />
+                      <span className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/60 to-transparent px-2 pb-1.5 pt-6 text-[12px] text-white opacity-0 transition-opacity group-hover:opacity-100">{it.name}</span>
                       {it.kind === "video" && (
                         <>
-                          <span className="absolute left-1/2 top-[calc(50%-14px)] grid size-10 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white">
+                          <span className="pointer-events-none absolute left-1/2 top-1/2 grid size-9 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white">
                             <Play className="size-4 fill-current" />
                           </span>
-                          {it.duration != null && <span className="absolute right-2 top-2 rounded bg-black/65 px-1.5 text-[11px] text-white">{fmtDur(it.duration)}</span>}
+                          {it.duration != null && <span className="absolute right-1.5 top-1.5 rounded bg-black/65 px-1.5 text-[11px] text-white">{fmtDur(it.duration)}</span>}
                         </>
                       )}
-                      <div className="flex justify-between gap-2 px-3 py-2 text-[12.5px] text-muted-foreground">
-                        <span className="truncate text-foreground">{it.name}</span>
-                        <span className="shrink-0">{fmtDate(it.modified)}</span>
-                      </div>
                     </button>
                   ))}
                 </div>
@@ -276,7 +341,7 @@ export function LibraryView() {
                 <div className="space-y-2">
                   {g.items.map(({ it, i }) => (
                     <button key={it.id} onClick={() => setOpen(i)} className="flex w-full items-center gap-3 rounded-lg border bg-card p-2 text-left">
-                      <Thumb item={it} className="size-12 rounded-md" />
+                      <Thumb item={it} size={96} className="size-12 shrink-0 rounded-md" />
                       <span className="min-w-0 flex-1 truncate text-[14px]">{it.name}</span>
                       <span className="shrink-0 text-[12.5px] text-muted-foreground">
                         {it.kind === "video" ? fmtDur(it.duration) : fmtSize(it.size)} · {fmtDate(it.modified)}
@@ -336,7 +401,7 @@ export function LibraryView() {
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 key={current.id}
-                src={`/api/library/file/${current.id}`}
+                src={zoomed ? `/api/library/file/${current.id}` : `/api/library/thumb/${current.id}?s=1600`}
                 alt={current.name}
                 onClick={() => setZoomId(zoomed ? null : current.id)}
                 className={cn("rounded-lg", zoomed ? "max-w-none cursor-zoom-out" : "max-h-full max-w-full cursor-zoom-in object-contain")}
@@ -358,7 +423,7 @@ export function LibraryView() {
           <div ref={strip} className="flex gap-2 overflow-x-auto p-3">
             {files.map((f, i) => (
               <button key={f.id} data-current={i === open} onClick={() => setOpen(i)} aria-label={f.name} className={cn("relative size-14 shrink-0 overflow-hidden rounded-md border-2 border-transparent opacity-60 hover:opacity-100", i === open && "border-white opacity-100")}>
-                <Thumb item={f} className="size-full" />
+                <Thumb item={f} size={96} className="size-full" />
                 {f.kind === "video" && <Play className="absolute left-1/2 top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 fill-white text-white" />}
               </button>
             ))}

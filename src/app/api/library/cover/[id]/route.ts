@@ -14,5 +14,5 @@ export const GET = api<Ctx>(async (req, { params }) => {
   if (!cover) return NextResponse.json({ error: "no_cover" }, { status: 404 });
   const size = Math.min(800, Math.max(64, Number(new URL(req.url).searchParams.get("s")) || 320));
   const img = await fetchThumb(cover, conn.folderId, size);
-  return new Response(img.body, { headers: { "Content-Type": img.headers.get("Content-Type") ?? "image/jpeg", "Cache-Control": "private, max-age=3600" } });
+  return new Response(img.body, { headers: { "Content-Type": img.headers.get("Content-Type") ?? "image/jpeg", "Cache-Control": "private, max-age=86400" } });
 });
