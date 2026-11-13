@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 import { useTheme } from "next-themes";
 import { ArrowLeft, CalendarDays, ChartColumn, Wallet, Ellipsis, LayoutGrid, Sprout, Target, Images, ListChecks, Loader2, LogOut, Moon, NotebookPen, Plug, Search, ShieldCheck, Settings, Sun } from "lucide-react";
 import { useData } from "@/lib/client/use-data";
@@ -207,7 +208,12 @@ function ThemeToggle() {
       size="icon-sm"
       aria-label="Switch light or dark theme"
       title="Switch theme"
-      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+      onClick={() => {
+        const next = resolvedTheme === "dark" ? "light" : "dark";
+        // a soft cross-fade where the browser supports it; plain switch elsewhere
+        if (document.startViewTransition) document.startViewTransition(() => flushSync(() => setTheme(next)));
+        else setTheme(next);
+      }}
     >
       <Sun className="hidden dark:block" />
       <Moon className="dark:hidden" />
