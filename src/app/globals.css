@@ -203,6 +203,12 @@ main [data-slot="card"]:nth-child(4) { animation-delay: 150ms; }
 main [data-slot="card"]:nth-child(5) { animation-delay: 200ms; }
 main [data-slot="card"]:nth-child(n + 6) { animation-delay: 250ms; }
 
+/* Progress bars fill in from the left when they appear */
+main .overflow-hidden.rounded-full.bg-muted > div:first-child:not([class*="motion-"]) {
+  transform-origin: left;
+  animation: grow-x 0.9s var(--ease-out-soft) 0.2s both;
+}
+
 /* Things you can open lift a little under the pointer */
 .lift {
   transition: transform 0.2s var(--ease-out-soft), border-color 0.2s, box-shadow 0.2s;
