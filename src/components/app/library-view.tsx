@@ -65,17 +65,20 @@ function fetchList(folder?: string): Promise<LibraryList> {
 function FolderCard({ folder, onOpen, index = 0 }: { folder: LibraryItem; onOpen: () => void; index?: number }) {
   const [noCover, setNoCover] = useState(false);
   const warm = () => void fetchList(folder.id).catch(() => {});
+  const style = { "--d": `${Math.min(index, 8) * 45}ms` } as React.CSSProperties;
+  // a folder with nothing to preview becomes a slim row instead of an empty picture
+  if (noCover)
+    return (
+      <button onClick={onOpen} onMouseEnter={warm} onTouchStart={warm} onFocus={warm} style={style} className="lift motion-rise flex items-center gap-2.5 self-start rounded-lg border bg-card px-3 py-3 text-left">
+        <Folder className="size-5 shrink-0 text-muted-foreground" />
+        <b className="truncate text-[14px] font-medium">{folder.name}</b>
+      </button>
+    );
   return (
-    <button onClick={onOpen} onMouseEnter={warm} onTouchStart={warm} onFocus={warm} className="lift motion-rise group overflow-hidden rounded-lg border bg-card text-left" style={{ "--d": `${Math.min(index, 8) * 45}ms` } as React.CSSProperties}>
+    <button onClick={onOpen} onMouseEnter={warm} onTouchStart={warm} onFocus={warm} style={style} className="lift motion-rise group self-start overflow-hidden rounded-lg border bg-card text-left">
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
-        {!noCover ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={`/api/library/cover/${folder.id}?s=320`} alt="" loading="lazy" decoding="async" onError={() => setNoCover(true)} className="size-full object-cover" />
-        ) : (
-          <div className="grid size-full place-items-center text-muted-foreground">
-            <Folder className="size-9" />
-          </div>
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={`/api/library/cover/${folder.id}?s=320`} alt="" loading="lazy" decoding="async" onError={() => setNoCover(true)} className="size-full object-cover" />
         <span className="absolute left-2 top-2 grid size-7 place-items-center rounded-md bg-black/55 text-white">
           <Folder className="size-4" />
         </span>
