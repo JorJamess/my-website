@@ -31,6 +31,14 @@ const NAV = [
   { href: "/app/approvals", label: "Approvals", icon: ShieldCheck },
 ] as const;
 
+// Desktop sidebar groups (the mobile bar keeps the flat NAV order above)
+const GROUPS: { title: string; hrefs: string[] }[] = [
+  { title: "Today", hrefs: ["/app", "/app/calendar"] },
+  { title: "Plan", hrefs: ["/app/todos", "/app/habits", "/app/goals"] },
+  { title: "Money & memories", hrefs: ["/app/money", "/app/notes", "/app/library", "/app/insights"] },
+  { title: "System", hrefs: ["/app/connect", "/app/approvals"] },
+];
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -95,7 +103,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh">
       {/* Sidebar (desktop) */}
-      <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 flex-col border-r px-4 py-7 md:flex">
+      <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 flex-col overflow-y-auto border-r px-4 py-6 md:flex">
         <Link href="/app" className="group/pupu mb-6 flex items-center gap-2 px-1.5 text-[15px] font-semibold tracking-tight">
           <Pupu size={30} />
           {SITE_NAME}
@@ -103,20 +111,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <SearchButton onClick={() => setSearchOpen(true)} className="mb-3" />
         <nav ref={navRef} className="relative flex flex-col gap-0.5">
           <div ref={hlRef} aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-9 rounded-lg bg-gradient-to-r from-brand-soft to-brand-soft/20 opacity-0 transition-[transform,height,opacity] duration-300 ease-[cubic-bezier(0.3,0.9,0.3,1)]" />
-          {NAV.map(({ href, label, icon: Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              aria-current={isActive(href) ? "page" : undefined}
-              className={cn(
-                "relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[14.5px] text-muted-foreground transition-colors hover:text-foreground",
-                isActive(href) && "font-medium text-foreground hover:text-foreground",
-              )}
-            >
-              <Icon className="size-[17px]" strokeWidth={1.7} />
-              {label}
-              {badge(href) > 0 && <span className="ml-auto rounded-full bg-brand px-1.5 text-[11px] text-white">{badge(href)}</span>}
-            </Link>
+          {GROUPS.map((g, gi) => (
+            <div key={g.title} className="flex flex-col gap-0.5">
+              <p className={cn("px-2.5 pb-1 text-[10.5px] font-medium tracking-[0.09em] text-muted-foreground/70 uppercase", gi === 0 ? "pt-0" : "pt-3")}>{g.title}</p>
+              {g.hrefs.map((h) => NAV.find((n) => n.href === h)!).map(({ href, label, icon: Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={isActive(href) ? "page" : undefined}
+                  className={cn(
+                    "relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[14.5px] text-muted-foreground transition-colors hover:text-foreground",
+                    isActive(href) && "font-medium text-foreground hover:text-foreground",
+                  )}
+                >
+                  <Icon className="size-[17px]" strokeWidth={1.7} />
+                  {label}
+                  {badge(href) > 0 && <span className="ml-auto rounded-full bg-brand px-1.5 text-[11px] text-white">{badge(href)}</span>}
+                </Link>
+              ))}
+            </div>
           ))}
         </nav>
         <div className="mt-auto flex items-center gap-0.5">
