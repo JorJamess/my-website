@@ -66,7 +66,7 @@ function FolderCard({ folder, onOpen }: { folder: LibraryItem; onOpen: () => voi
   const [noCover, setNoCover] = useState(false);
   const warm = () => void fetchList(folder.id).catch(() => {});
   return (
-    <button onClick={onOpen} onMouseEnter={warm} onTouchStart={warm} onFocus={warm} className="group overflow-hidden rounded-lg border bg-card text-left">
+    <button onClick={onOpen} onMouseEnter={warm} onTouchStart={warm} onFocus={warm} className="lift group overflow-hidden rounded-lg border bg-card text-left">
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
         {!noCover ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -323,7 +323,7 @@ export function LibraryView() {
               {view === "grid" ? (
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2">
                   {g.items.map(({ it, i }) => (
-                    <button key={it.id} onClick={() => setOpen(i)} title={it.name} className="group relative block aspect-square w-full overflow-hidden rounded-lg bg-muted">
+                    <button key={it.id} onClick={() => setOpen(i)} title={it.name} className="lift group relative block aspect-square w-full overflow-hidden rounded-lg bg-muted">
                       <Thumb item={it} size={360} className="size-full" />
                       <span className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/60 to-transparent px-2 pb-1.5 pt-6 text-[12px] text-white opacity-0 transition-opacity group-hover:opacity-100">{it.name}</span>
                       {it.kind === "video" && (

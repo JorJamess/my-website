@@ -189,6 +189,34 @@
 .motion-from-right { animation: slide-from-right 0.32s var(--ease-out-soft) both; }
 .motion-from-left { animation: slide-from-left 0.32s var(--ease-out-soft) both; }
 
+/* Page entrance: the title rises, then the cards follow one after another.
+   Applied to every page from here so each view doesn't need its own wiring. */
+main h1 {
+  animation: rise 0.55s var(--ease-out-soft) both;
+}
+main [data-slot="card"]:not([class*="motion-"]) {
+  animation: rise 0.5s var(--ease-out-soft) both;
+}
+main [data-slot="card"]:nth-child(2) { animation-delay: 50ms; }
+main [data-slot="card"]:nth-child(3) { animation-delay: 100ms; }
+main [data-slot="card"]:nth-child(4) { animation-delay: 150ms; }
+main [data-slot="card"]:nth-child(5) { animation-delay: 200ms; }
+main [data-slot="card"]:nth-child(n + 6) { animation-delay: 250ms; }
+
+/* Things you can open lift a little under the pointer */
+.lift {
+  transition: transform 0.2s var(--ease-out-soft), border-color 0.2s, box-shadow 0.2s;
+}
+@media (hover: hover) {
+  .lift:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px -12px color-mix(in oklab, var(--foreground) 35%, transparent);
+  }
+}
+.lift:active {
+  transform: scale(0.98);
+}
+
 /* Today timeline: the rail draws down, then each item follows */
 .timeline::before {
   transform-origin: top;
