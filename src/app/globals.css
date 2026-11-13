@@ -130,8 +130,8 @@
 /* Switching theme fades the whole page instead of snapping */
 ::view-transition-old(root),
 ::view-transition-new(root) {
-  animation-duration: 0.5s;
-  animation-timing-function: ease;
+  animation-duration: 0.2s;
+  animation-timing-function: ease-out;
 }
 
 @layer base {
