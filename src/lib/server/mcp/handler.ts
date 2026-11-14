@@ -36,6 +36,12 @@ const PROMPTS = [
   },
 ] as const;
 
+/** Tools a read-only token may see and call: must be marked readOnlyHint, minus ones that expose third-party text or visitor data. */
+const READ_SCOPE_DENY = new Set(["list_messages", "get_portfolio_stats"]);
+export type McpScope = "full" | "read";
+export const allowedForRead = (t: { name: string; annotations?: { readOnlyHint?: boolean } }) =>
+  t.annotations?.readOnlyHint === true && !READ_SCOPE_DENY.has(t.name);
+
 type JsonRpcRequest = { jsonrpc: "2.0"; id?: string | number | null; method: string; params?: Record<string, unknown> };
 type JsonRpcResponse =
   | { jsonrpc: "2.0"; id: string | number | null; result: unknown }
@@ -47,7 +53,7 @@ const rpcError = (id: JsonRpcRequest["id"], code: number, message: string, data?
   error: { code, message, ...(data ? { data } : {}) },
 });
 
-async function handleOne(msg: JsonRpcRequest): Promise<JsonRpcResponse | null> {
+async function handleOne(msg: JsonRpcRequest, scope: McpScope = "full"): Promise<JsonRpcResponse | null> {
   if (!msg || msg.jsonrpc !== "2.0" || typeof msg.method !== "string") {
     return rpcError(msg?.id ?? null, -32600, "Invalid Request");
   }
@@ -75,11 +81,13 @@ async function handleOne(msg: JsonRpcRequest): Promise<JsonRpcResponse | null> {
     case "ping":
       return { jsonrpc: "2.0", id: msg.id!, result: {} };
     case "tools/list":
-      return { jsonrpc: "2.0", id: msg.id!, result: { tools: toolList() } };
+      return { jsonrpc: "2.0", id: msg.id!, result: { tools: scope === "read" ? toolList().filter(allowedForRead) : toolList() } };
     case "tools/call": {
       const name = String(msg.params?.name ?? "");
       const tool = tools.find((t) => t.name === name);
       if (!tool) return rpcError(msg.id, -32602, `Unknown tool: ${name}`);
+      // read-only token: refuse before parsing or running anything
+      if (scope === "read" && !allowedForRead(tool)) return rpcError(msg.id, -32602, "This token is read-only: tool not available");
       try {
         const args = tool.schema.parse(msg.params?.arguments ?? {});
         const input = args as Record<string, unknown>;
@@ -124,7 +132,7 @@ async function handleOne(msg: JsonRpcRequest): Promise<JsonRpcResponse | null> {
   }
 }
 
-export async function handleMcpPost(req: Request): Promise<Response> {
+export async function handleMcpPost(req: Request, scope: McpScope = "full"): Promise<Response> {
   let body: unknown;
   try {
     body = await req.json();
@@ -133,10 +141,10 @@ export async function handleMcpPost(req: Request): Promise<Response> {
   }
   const headers = { "Content-Type": "application/json" };
   if (Array.isArray(body)) {
-    const out = (await Promise.all(body.map((m) => handleOne(m as JsonRpcRequest)))).filter(Boolean);
+    const out = (await Promise.all(body.map((m) => handleOne(m as JsonRpcRequest, scope)))).filter(Boolean);
     return out.length ? new Response(JSON.stringify(out), { headers }) : new Response(null, { status: 202 });
   }
-  const res = await handleOne(body as JsonRpcRequest);
+  const res = await handleOne(body as JsonRpcRequest, scope);
   return res ? new Response(JSON.stringify(res), { headers }) : new Response(null, { status: 202 });
 }
 

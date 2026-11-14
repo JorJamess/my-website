@@ -8,6 +8,7 @@ interface __BaseEnv_CloudflareEnv {
 	ADMIN_PASSWORD: string;
 	SESSION_SECRET: string;
 	MCP_TOKEN: string;
+	MCP_READ_TOKEN?: string;
 	INTEGRATION_KEY: string;
 	GOOGLE_CLIENT_ID: string;
 	GOOGLE_CLIENT_SECRET: string;
