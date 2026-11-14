@@ -77,3 +77,17 @@ export async function checkMcpToken(token: string | null | undefined) {
   if (!env.MCP_TOKEN || env.MCP_TOKEN.length < 16) return false;
   return safeEqual(token, env.MCP_TOKEN);
 }
+
+/**
+ * Which MCP scope a token grants: "full" (MCP_TOKEN) or "read" (MCP_READ_TOKEN, read-only tools only).
+ * Both secrets are always compared so timing does not reveal which one matched; the read token must be
+ * at least 16 characters and different from the full token.
+ */
+export async function checkMcpScope(token: string | null | undefined): Promise<"full" | "read" | null> {
+  if (!token) return null;
+  const env = await getEnv();
+  const fullOk = !!env.MCP_TOKEN && env.MCP_TOKEN.length >= 16 && safeEqual(token, env.MCP_TOKEN);
+  const readOk = !!env.MCP_READ_TOKEN && env.MCP_READ_TOKEN.length >= 16 && env.MCP_READ_TOKEN !== env.MCP_TOKEN && safeEqual(token, env.MCP_READ_TOKEN);
+  if (fullOk) return "full";
+  return readOk ? "read" : null;
+}

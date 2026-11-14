@@ -1,6 +1,8 @@
 ADMIN_PASSWORD=change-me
 SESSION_SECRET=long-random-string
 MCP_TOKEN=long-random-string
+# Optional: read-only MCP token (>=16 chars, different from MCP_TOKEN). Works only on /api/mcp with a Bearer header.
+MCP_READ_TOKEN=
 INTEGRATION_KEY=long-random-string
 # ใช้ตอน dev เท่านั้น (production ใช้ service binding MONEY)
 MONEY_API_URL=https://money-tracker.example.workers.dev
